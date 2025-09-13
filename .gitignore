@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# .envファイルがpushされないようにする
+/.env
+
+# Firebase service account keys をミスってコミットしないため
+*.json
