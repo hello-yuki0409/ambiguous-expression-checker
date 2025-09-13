@@ -25,6 +25,3 @@ dist-ssr
 
 # .envファイルがpushされないようにする
 /.env
-
-# Firebase service account keys をミスってコミットしないため
-*.json
