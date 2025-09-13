@@ -66,7 +66,7 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ambiguous-expression-checker
+          projectId: green-network-472014-a4
           channelId: pr-${{ github.event.pull_request.number }}
           target: default
           entryPoint: .
@@ -107,7 +107,7 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: ambiguous-expression-checker
+          projectId: green-network-472014-a4
           channelId: live
           target: default
           entryPoint: .
