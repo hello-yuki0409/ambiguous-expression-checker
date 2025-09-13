@@ -11,6 +11,7 @@ permissions:
   id-token: write
   checks: write
   pull-requests: write
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -51,6 +52,14 @@ jobs:
           name: dist
           path: dist
 
+      # 🔽 デバッグステップを追加
+      - name: Debug SA (which credentials are used?)
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+          echo "client_email: $(jq -r .client_email sa.json)"
+          echo "project_id  : $(jq -r .project_id sa.json)"
+          echo "::add-mask::$(jq -r .private_key_id sa.json)"
+
       - name: Deploy to Firebase Hosting (preview channel)
         id: deploy
         uses: FirebaseExtended/action-hosting-deploy@v0
@@ -84,6 +93,13 @@ jobs:
         with:
           name: dist
           path: dist
+
+      - name: Debug SA (which credentials are used?)
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+          echo "client_email: $(jq -r .client_email sa.json)"
+          echo "project_id  : $(jq -r .project_id sa.json)"
+          echo "::add-mask::$(jq -r .private_key_id sa.json)"
 
       - name: Deploy to Firebase Hosting (live)
         id: deploy
