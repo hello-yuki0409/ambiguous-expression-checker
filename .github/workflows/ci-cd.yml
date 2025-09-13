@@ -72,6 +72,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Show repo tree
+        run: |
+          pwd
+          ls -la
+          echo "----"
+          [ -f firebase.json ] && cat firebase.json || echo "firebase.json not found"
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -84,7 +91,7 @@ jobs:
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          projectId: <PROJECT_ID>
+          projectId: ambiguous-expression-checker
           channelId: live
           target: default
           entryPoint: .
