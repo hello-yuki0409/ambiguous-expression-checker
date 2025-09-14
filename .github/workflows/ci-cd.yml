@@ -67,7 +67,6 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: green-network-472014-a4
-          channelId: pr-${{ github.event.pull_request.number }}
           target: default
           entryPoint: .
 
@@ -108,6 +107,5 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: green-network-472014-a4
-          channelId: live
           target: default
           entryPoint: .
