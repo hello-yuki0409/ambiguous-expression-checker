@@ -52,7 +52,6 @@ jobs:
           name: dist
           path: dist
 
-      # 🔽 デバッグステップを追加
       - name: Debug SA (which credentials are used?)
         run: |
           echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
@@ -67,8 +66,10 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: green-network-472014-a4
+          channelId: ${{ github.head_ref || github.ref_name || github.sha }}
           target: default
           entryPoint: .
+          expires: 7d # プレビューは有効期限付きでOK
 
   deploy-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
