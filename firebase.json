@@ -1,13 +1,12 @@
 {
-  "hosting": {
-    "site": "ambiguous-expression-checker",
-    "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
+  "projects": {
+    "default": "green-network-472014-a4"
+  },
+  "targets": {
+    "green-network-472014-a4": {
+      "hosting": {
+        "default": ["ambiguous-expression-checker"]
       }
-    ]
+    }
   }
 }
