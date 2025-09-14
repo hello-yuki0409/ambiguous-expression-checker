@@ -69,7 +69,7 @@ jobs:
           channelId: ${{ github.head_ref || github.ref_name || github.sha }}
           target: default
           entryPoint: .
-          expires: 7d # プレビューは有効期限付きでOK
+          expires: 7d
 
   deploy-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
