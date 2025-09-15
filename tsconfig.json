@@ -5,9 +5,12 @@
     { "path": "./tsconfig.node.json" }
   ],
   "compilerOptions": {
+    "jsx": "react-jsx",
+    "esModuleInterop": true, // 警告解消する
+    "types": ["jest", "@testing-library/jest-dom", "node"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*", "jest.config.ts"]
     }
   }
 }
