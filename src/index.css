@@ -120,3 +120,25 @@
     @apply bg-background text-foreground;
   }
 }
+
+.aimai-sev-1 {
+  background: rgba(255, 215, 0, 0.35);
+} /* gold */
+.aimai-sev-2 {
+  background: rgba(255, 99, 71, 0.35);
+} /* tomato */
+.aimai-sev-3 {
+  background: rgba(220, 20, 60, 0.4);
+} /* crimson */
+.sev-1 {
+  background: rgba(255, 215, 0, 0.8);
+  border-radius: 9999px;
+}
+.sev-2 {
+  background: rgba(255, 99, 71, 0.8);
+  border-radius: 9999px;
+}
+.sev-3 {
+  background: rgba(220, 20, 60, 0.85);
+  border-radius: 9999px;
+}

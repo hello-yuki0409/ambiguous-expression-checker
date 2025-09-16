@@ -17,15 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+
       - run: npm ci
       - run: npm run typecheck --if-present
       - run: npm run lint --if-present
       - run: npm test --if-present -- --ci
       - run: npm run build
+
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
@@ -41,18 +44,25 @@ jobs:
       name: preview
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
+
       - name: Write SA file
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+        run: |
+          cat > sa.json <<'JSON'
+          ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          JSON
+
       - name: Deploy preview (channel)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa.json
-          CHANNEL: ${{ github.head_ref || github.ref_name || github.sha }}
+          CHANNEL: ${{ (github.head_ref || github.ref_name || github.sha) }}
         run: |
-          npx firebase-tools@latest hosting:channel:deploy "$CHANNEL" \
+          SAFE_CHANNEL=$(echo "$CHANNEL" | tr '/._' '-' | tr '[:upper:]' '[:lower:]' | cut -c1-40)
+          npx firebase-tools@latest hosting:channel:deploy "$SAFE_CHANNEL" \
             --only default \
             --expires 7d \
             --project green-network-472014-a4
@@ -65,12 +75,18 @@ jobs:
       name: production
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
+
       - name: Write SA file
-        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > sa.json
+        run: |
+          cat > sa.json <<'JSON'
+          ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          JSON
+
       - name: Deploy LIVE (no channel)
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ github.workspace }}/sa.json
