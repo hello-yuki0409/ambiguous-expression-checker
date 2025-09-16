@@ -1,54 +1,75 @@
-import { memo } from "react";
+import { useMemo, useState } from "react";
 import { type Finding } from "@/lib/detection";
-import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { Circle } from "lucide-react";
+
+type SortMode = "order" | "category" | "frequency";
 
 type Props = {
   findings: Finding[];
   onJump?: (offset: number) => void;
 };
 
-function FindingsPanel({ findings, onJump }: Props) {
+export default function FindingsPanel({ findings, onJump }: Props) {
+  const [sort, setSort] = useState<SortMode>("order");
+
+  const sorted = useMemo(() => {
+    if (sort === "order") return findings;
+
+    if (sort === "category") {
+      return [...findings].sort((a, b) => {
+        if (a.category === b.category) return a.start - b.start;
+        return a.category.localeCompare(b.category);
+      });
+    }
+
+    // frequency: 同じテキストの出現回数で降順
+    const freq = new Map<string, number>();
+    findings.forEach((f) => freq.set(f.text, (freq.get(f.text) ?? 0) + 1));
+    return [...findings].sort((a, b) => {
+      const fa = freq.get(a.text)!;
+      const fb = freq.get(b.text)!;
+      if (fb !== fa) return fb - fa;
+      return a.start - b.start;
+    });
+  }, [findings, sort]);
+
   if (!findings.length) {
     return <div className="text-sm text-muted-foreground">検出なし</div>;
   }
 
-  const sevColor = (sev: number) => {
-    switch (sev) {
-      case 1:
-        return "text-yellow-500";
-      case 2:
-        return "text-orange-500";
-      case 3:
-        return "text-red-500";
-      default:
-        return "text-gray-400";
-    }
-  };
-
   return (
-    <ScrollArea className="h-[70vh] pr-2">
-      <div className="space-y-2">
-        {findings.map((f, i) => (
-          <Card
-            key={`${f.start}-${i}`}
-            className="cursor-pointer hover:bg-accent transition"
-            onClick={() => onJump?.(f.start)}
-          >
-            <CardContent className="p-3 flex items-center gap-2">
-              <Circle size={12} className={sevColor(f.severity)} />
-              <Badge variant="secondary" className="text-xs">
-                {f.category}
-              </Badge>
-              <span className="truncate">{f.text}</span>
-            </CardContent>
-          </Card>
-        ))}
+    <div className="space-y-2 text-sm">
+      <div className="flex items-center justify-between mb-1">
+        <div className="font-medium">一覧（{findings.length}件）</div>
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortMode)}
+          className="border rounded-md px-2 py-1 text-xs"
+          aria-label="sort"
+        >
+          <option value="order">登場順</option>
+          <option value="category">カテゴリ</option>
+          <option value="frequency">頻度</option>
+        </select>
       </div>
-    </ScrollArea>
+
+      {sorted.map((f, i) => (
+        <button
+          key={`${f.start}-${i}`}
+          className="w-full text-left p-2 rounded-md border hover:bg-muted/40 transition"
+          onClick={() => onJump?.(f.start)}
+          title={f.reason ?? "曖昧な表現"}
+        >
+          <div className="flex items-center gap-2">
+            <span
+              className={`inline-block w-2 h-2 rounded-full sev-${f.severity}`}
+            />
+            <span className="font-mono text-[11px] opacity-70">
+              [{f.category}]
+            </span>
+            <span className="truncate">{f.text}</span>
+          </div>
+        </button>
+      ))}
+    </div>
   );
 }
-
-export default memo(FindingsPanel);

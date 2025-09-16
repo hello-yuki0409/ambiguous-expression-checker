@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import EditorCore, { type OnMount } from "@monaco-editor/react";
-import type * as monaco from "monaco-editor";
+import * as monaco from "monaco-editor";
 import FindingsPanel from "@/components/FindingsPanel";
 import { detect, type Finding } from "@/lib/detection";
 import { defaultPatterns } from "@/lib/patterns";
 import { Button } from "@/components/ui/button";
+import { loadHistory, pushHistory, type RunHistory } from "@/lib/history";
 
 const STORAGE_KEY = "aimai__lastContent";
 
@@ -14,36 +15,25 @@ export default function Editor() {
   );
   const [findings, setFindings] = useState<Finding[]>([]);
   const [ms, setMs] = useState<number>(0);
+  const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-  const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+  const monacoRef = useRef<typeof monaco | null>(null);
   const decorationsRef =
     useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
 
-  const onMount: OnMount = (editor, monacoNS) => {
-    editorRef.current = editor;
-    monacoRef.current = monacoNS as unknown as typeof import("monaco-editor");
-    decorationsRef.current = editor.createDecorationsCollection();
-  };
+  // severity ごとのインライン装飾クラス
+  const decorations: monaco.editor.IModelDeltaDecoration[] = useMemo(() => {
+    if (!editorRef.current || !monacoRef.current) return [];
+    const monacoApi = monacoRef.current;
+    const model = editorRef.current.getModel();
+    if (!model) return [];
 
-  // findings が変わったときだけ装飾を差し替える
-  useEffect(() => {
-    const editor = editorRef.current;
-    const monacoNS = monacoRef.current;
-    const collection = decorationsRef.current;
-    if (!editor || !monacoNS || !collection) return;
-
-    const model = editor.getModel();
-    if (!model) return;
-
-    const decos: monaco.editor.IModelDeltaDecoration[] = findings.map((f) => {
+    return findings.map((f) => {
       const start = model.getPositionAt(f.start);
       const end = model.getPositionAt(f.end);
-      const hover: monaco.IMarkdownString = {
-        value: `**${f.category}**: ${f.reason ?? "曖昧な表現"}`,
-      };
       return {
-        range: new monacoNS.Range(
+        range: new monacoApi.Range(
           start.lineNumber,
           start.column,
           end.lineNumber,
@@ -51,32 +41,60 @@ export default function Editor() {
         ),
         options: {
           inlineClassName: `aimai-sev-${f.severity}`,
-          hoverMessage: hover,
+          hoverMessage: {
+            value: `**${f.category}**: ${f.reason ?? "曖昧な表現"}`,
+          },
         },
       };
     });
-
-    collection.set(decos);
   }, [findings]);
 
-  // アンマウント時にクリーンアップする
   useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+
+    if (!decorationsRef.current) {
+      decorationsRef.current = editor.createDecorationsCollection();
+    }
+
+    decorationsRef.current.set(decorations);
+
     return () => {
-      try {
-        decorationsRef.current?.clear();
-      } catch (err) {
-        console.error("Decoration cleanup failed:", err);
-      }
+      decorationsRef.current?.clear();
     };
-  }, []);
+  }, [decorations]);
+
+  const onMount: OnMount = (editor, monacoApi) => {
+    editorRef.current = editor;
+    monacoRef.current = monacoApi;
+  };
 
   const runCheck = () => {
     const t0 = performance.now();
     const result = detect(content, defaultPatterns);
     const t1 = performance.now();
+    const elapsed = Math.round(t1 - t0);
+
     setFindings(result);
-    setMs(Math.round(t1 - t0));
+    setMs(elapsed);
     localStorage.setItem(STORAGE_KEY, content);
+
+    // 上位頻出語（最大3）
+    const freq = new Map<string, number>();
+    result.forEach((f) => freq.set(f.text, (freq.get(f.text) ?? 0) + 1));
+    const topWords = [...freq.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([w]) => w);
+
+    const record: RunHistory = {
+      ts: Date.now(),
+      length: content.length,
+      count: result.length,
+      ms: elapsed,
+      topWords,
+    };
+    setHistory(pushHistory(record));
   };
 
   const jumpTo = (offset: number) => {
@@ -124,6 +142,33 @@ export default function Editor() {
         <p className="text-xs text-muted-foreground mt-3">
           * severity色: 1=黄, 2=橙, 3=赤。項目クリックで本文へジャンプ。
         </p>
+
+        <div className="mt-6 border-t pt-3">
+          <h3 className="font-semibold mb-2">直近履歴</h3>
+          {history.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              まだ履歴はありません
+            </p>
+          ) : (
+            <ul className="space-y-1 text-xs">
+              {history.map((h, i) => (
+                <li key={i} className="flex items-center justify-between gap-2">
+                  <span className="opacity-70">
+                    {new Date(h.ts).toLocaleString()}
+                  </span>
+                  <span className="font-mono">
+                    {h.count}件 / {h.length}字 / {h.ms}ms
+                  </span>
+                  {h.topWords.length > 0 && (
+                    <span className="truncate max-w-[140px] opacity-80">
+                      {h.topWords.join(" / ")}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
