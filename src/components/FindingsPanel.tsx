@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { type Finding } from "@/lib/detection";
 
 type SortMode = "order" | "category" | "frequency";
@@ -11,26 +11,32 @@ type Props = {
 export default function FindingsPanel({ findings, onJump }: Props) {
   const [sort, setSort] = useState<SortMode>("order");
 
-  const sorted = useMemo(() => {
-    if (sort === "order") return findings;
+  // ソート関数を切り替え時だけ適用する
+  const sortFindings = (list: Finding[], mode: SortMode) => {
+    if (mode === "order") return list;
 
-    if (sort === "category") {
-      return [...findings].sort((a, b) => {
+    if (mode === "category") {
+      return [...list].sort((a, b) => {
         if (a.category === b.category) return a.start - b.start;
         return a.category.localeCompare(b.category);
       });
     }
 
-    // frequency: 同じテキストの出現回数で降順
-    const freq = new Map<string, number>();
-    findings.forEach((f) => freq.set(f.text, (freq.get(f.text) ?? 0) + 1));
-    return [...findings].sort((a, b) => {
-      const fa = freq.get(a.text)!;
-      const fb = freq.get(b.text)!;
-      if (fb !== fa) return fb - fa;
-      return a.start - b.start;
-    });
-  }, [findings, sort]);
+    if (mode === "frequency") {
+      const freq = new Map<string, number>();
+      list.forEach((f) => freq.set(f.text, (freq.get(f.text) ?? 0) + 1));
+      return [...list].sort((a, b) => {
+        const fa = freq.get(a.text)!;
+        const fb = freq.get(b.text)!;
+        if (fb !== fa) return fb - fa;
+        return a.start - b.start;
+      });
+    }
+
+    return list;
+  };
+
+  const sorted = sortFindings(findings, sort);
 
   if (!findings.length) {
     return <div className="text-sm text-muted-foreground">検出なし</div>;
