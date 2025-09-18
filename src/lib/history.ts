@@ -24,3 +24,11 @@ export function pushHistory(item: RunHistory) {
   localStorage.setItem(KEY, JSON.stringify(next));
   return next;
 }
+
+export function clearHistory() {
+  try {
+    localStorage.removeItem("aimai__runHistory");
+  } catch (err) {
+    console.warn("Failed to clear history:", err);
+  }
+}

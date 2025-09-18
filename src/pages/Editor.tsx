@@ -5,8 +5,22 @@ import FindingsPanel from "@/components/FindingsPanel";
 import { detect, type Finding } from "@/lib/detection";
 import { defaultPatterns } from "@/lib/patterns";
 import { Button } from "@/components/ui/button";
-import { loadHistory, pushHistory, type RunHistory } from "@/lib/history";
-
+import {
+  loadHistory,
+  pushHistory,
+  clearHistory,
+  type RunHistory,
+} from "@/lib/history";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 const STORAGE_KEY = "aimai__lastContent";
 
 export default function Editor() {
@@ -16,6 +30,13 @@ export default function Editor() {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [ms, setMs] = useState<number>(0);
   const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
+  const [openDelete, setOpenDelete] = useState(false);
+  const clearAll = () => {
+    setContent("");
+    setFindings([]);
+    setMs(0);
+    localStorage.removeItem(STORAGE_KEY);
+  };
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
@@ -56,7 +77,6 @@ export default function Editor() {
     if (!decorationsRef.current) {
       decorationsRef.current = editor.createDecorationsCollection();
     }
-
     decorationsRef.current.set(decorations);
 
     return () => {
@@ -77,7 +97,11 @@ export default function Editor() {
 
     setFindings(result);
     setMs(elapsed);
-    localStorage.setItem(STORAGE_KEY, content);
+    try {
+      localStorage.setItem(STORAGE_KEY, content);
+    } catch (err) {
+      console.warn("Failed to save content:", err);
+    }
 
     // 上位頻出語（最大3）
     const freq = new Map<string, number>();
@@ -115,7 +139,7 @@ export default function Editor() {
             検出時間: <span className="font-mono">{ms}ms</span>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setContent("")}>
+            <Button variant="outline" onClick={clearAll}>
               クリア
             </Button>
             <Button onClick={runCheck}>チェック</Button>
@@ -136,6 +160,7 @@ export default function Editor() {
           }}
         />
       </div>
+
       <div className="col-span-4">
         <h2 className="font-semibold mb-2">検出一覧（{findings.length}件）</h2>
         <FindingsPanel findings={findings} onJump={jumpTo} />
@@ -144,7 +169,52 @@ export default function Editor() {
         </p>
 
         <div className="mt-6 border-t pt-3">
-          <h3 className="font-semibold mb-2">直近履歴</h3>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold">直近履歴</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={history.length === 0}
+              onClick={() => {
+                if (history.length === 0) return;
+                setOpenDelete(true);
+              }}
+              aria-disabled={history.length === 0}
+            >
+              履歴を削除
+            </Button>
+          </div>
+          {/* 削除確認モーダル（shadcn/ui AlertDialog） */}
+          <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  直近履歴をすべて削除しますか？
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  ⚠️この操作は取り消せません
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel
+                  onClick={() => setOpenDelete(false)}
+                  aria-label="キャンセル"
+                >
+                  キャンセル
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    clearHistory();
+                    setHistory([]);
+                    setOpenDelete(false);
+                  }}
+                  aria-label="削除を実行"
+                >
+                  削除する
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           {history.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               まだ履歴はありません
@@ -154,7 +224,9 @@ export default function Editor() {
               {history.map((h, i) => (
                 <li key={i} className="flex items-center justify-between gap-2">
                   <span className="opacity-70">
-                    {new Date(h.ts).toLocaleString()}
+                    {new Date(h.ts).toLocaleString(undefined, {
+                      hour12: false,
+                    })}
                   </span>
                   <span className="font-mono">
                     {h.count}件 / {h.length}字 / {h.ms}ms
