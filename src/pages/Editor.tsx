@@ -11,6 +11,8 @@ import {
   clearHistory,
   type RunHistory,
 } from "@/lib/history";
+
+// 👇 AlertDialog を利用して中央表示
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,6 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
 const STORAGE_KEY = "aimai__lastContent";
 
 export default function Editor() {
@@ -31,19 +34,25 @@ export default function Editor() {
   const [ms, setMs] = useState<number>(0);
   const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
   const [openDelete, setOpenDelete] = useState(false);
-  const clearAll = () => {
-    setContent("");
-    setFindings([]);
-    setMs(0);
-    localStorage.removeItem(STORAGE_KEY);
-  };
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
   const decorationsRef =
     useRef<monaco.editor.IEditorDecorationsCollection | null>(null);
 
-  // severity ごとのインライン装飾クラス
+  const clearAll = () => {
+    setContent("");
+    setFindings([]);
+    setMs(0);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      console.warn("Failed to clear content from localStorage:", err);
+    }
+    clearHistory();
+    setHistory([]);
+  };
+
   const decorations: monaco.editor.IModelDeltaDecoration[] = useMemo(() => {
     if (!editorRef.current || !monacoRef.current) return [];
     const monacoApi = monacoRef.current;
@@ -73,12 +82,10 @@ export default function Editor() {
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
-
     if (!decorationsRef.current) {
       decorationsRef.current = editor.createDecorationsCollection();
     }
     decorationsRef.current.set(decorations);
-
     return () => {
       decorationsRef.current?.clear();
     };
@@ -103,7 +110,6 @@ export default function Editor() {
       console.warn("Failed to save content:", err);
     }
 
-    // 上位頻出語（最大3）
     const freq = new Map<string, number>();
     result.forEach((f) => freq.set(f.text, (freq.get(f.text) ?? 0) + 1));
     const topWords = [...freq.entries()]
@@ -179,12 +185,12 @@ export default function Editor() {
                 if (history.length === 0) return;
                 setOpenDelete(true);
               }}
-              aria-disabled={history.length === 0}
             >
               履歴を削除
             </Button>
           </div>
-          {/* 削除確認モーダル（shadcn/ui AlertDialog） */}
+
+          {/* 削除確認モーダル */}
           <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
             <AlertDialogContent>
               <AlertDialogHeader>
@@ -192,29 +198,23 @@ export default function Editor() {
                   直近履歴をすべて削除しますか？
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  ⚠️この操作は取り消せません
+                  ⚠️ この操作は取り消せません
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel
-                  onClick={() => setOpenDelete(false)}
-                  aria-label="キャンセル"
-                >
-                  キャンセル
-                </AlertDialogCancel>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
                     clearHistory();
                     setHistory([]);
-                    setOpenDelete(false);
                   }}
-                  aria-label="削除を実行"
                 >
                   削除する
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
           {history.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               まだ履歴はありません
