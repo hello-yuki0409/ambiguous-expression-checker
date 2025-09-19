@@ -195,10 +195,10 @@ export default function Editor() {
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>
-                  直近履歴をすべて削除しますか？
+                  直近の履歴をすべて削除しますか？
                 </AlertDialogTitle>
                 <AlertDialogDescription>
-                  ⚠️ この操作は取り消せません
+                  ⚠️この操作は取り消せません
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
