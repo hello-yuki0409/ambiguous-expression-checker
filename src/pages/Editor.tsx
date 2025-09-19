@@ -171,7 +171,7 @@ export default function Editor() {
         <h2 className="font-semibold mb-2">検出一覧（{findings.length}件）</h2>
         <FindingsPanel findings={findings} onJump={jumpTo} />
         <p className="text-xs text-muted-foreground mt-3">
-          * severity色: 1=黄, 2=橙, 3=赤。項目クリックで本文へジャンプ。
+          項目クリックで本文へジャンプ。
         </p>
 
         <div className="mt-6 border-t pt-3">
