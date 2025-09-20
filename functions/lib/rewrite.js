@@ -32,30 +32,24 @@ var __importStar = (this && this.__importStar) || (function () {
         return result;
     };
 })();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.rewrite = void 0;
 const dotenv = __importStar(require("dotenv"));
 // エミュレータの時だけ .env.local をロードする
-if (process.env.FUNCTIONS_EMULATOR) {
+if (process.env.FUNCTIONS_EMULATOR)
     dotenv.config({ path: ".env.local" });
-}
 const https_1 = require("firebase-functions/v2/https");
-const openai_1 = __importDefault(require("openai"));
-const openai = new openai_1.default({
-    apiKey: process.env.OPENAI_API_KEY, // 必須なので
-});
+const openai_1 = __importStar(require("openai"));
+const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY }); // 必須なので
 exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
         const { text, style } = req.body;
         if (!text) {
-            res.status(400).json({ error: "text is required" });
+            res.status(400).json({ error: { message: "text is required" } });
             return;
         }
-        const system = `あなたは日本語の編集者です。曖昧表現をできるだけ具体化し、原文の語彙・長さ・意味を保ちます。文体は ${style} に統一します。`;
-        const user = `次の文を 1 案だけ、必要最小限の修正で書き直してください。\n---\n${text}`;
+        const system = `あなたは日本語の編集者です。文体は ${style} に統一します。`;
+        const user = `次の文を必要最小限の修正で 1 案のみ書き直してください。\n---\n${text}`;
         const out = await openai.chat.completions.create({
             model: "gpt-4o-mini",
             messages: [
@@ -64,11 +58,18 @@ exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, asy
             ],
             temperature: 0.2,
         });
-        const candidate = out.choices[0]?.message?.content?.trim() ?? "";
-        res.json({ candidate });
+        res.json({ candidate: out.choices[0]?.message?.content?.trim() ?? "" });
     }
     catch (e) {
+        // 429 などはクライアントに伝える
+        if (e instanceof openai_1.APIError && (e.status || e.code)) {
+            const status = typeof e.status === "number" ? e.status : 500;
+            res
+                .status(status)
+                .json({ error: { message: e.message, code: e.code ?? "api_error" } });
+            return;
+        }
         console.error(e);
-        res.status(500).json({ error: "internal_error" });
+        res.status(500).json({ error: { message: "internal_error" } });
     }
 });
