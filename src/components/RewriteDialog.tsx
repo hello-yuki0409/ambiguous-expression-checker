@@ -82,17 +82,8 @@ export default function RewriteDialog({
             <Button onClick={handleGenerate} disabled={loading}>
               {loading ? "生成中..." : "候補を生成"}
             </Button>
-
-            {candidate && !loading && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => navigator.clipboard.writeText(candidate)}
-                >
-                  コピー
-                </Button>
-                <Button onClick={() => onReplace(candidate)}>差し替え</Button>
-              </>
+            {candidate && (
+              <Button onClick={() => onReplace(candidate)}>差し替え</Button>
             )}
           </div>
 
