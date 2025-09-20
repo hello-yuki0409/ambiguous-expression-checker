@@ -18,15 +18,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # root の依存をインストール
+      - name: Install root deps
+        run: npm ci
+
+      # functions の依存をインストール（キャッシュ付き）
+      - name: Cache functions node_modules
+        uses: actions/cache@v4
+        with:
+          path: functions/node_modules
+          key: ${{ runner.os }}-functions-${{ hashFiles('functions/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-functions-
+
+      - name: Install functions deps
+        working-directory: functions
+        run: npm ci
+
+      # dotenv など解決用
+      - name: Build Cloud Functions
+        working-directory: functions
+        run: npm run build
+
+      # Web 側の品質チェック
       - run: npm run typecheck --if-present
       - run: npm run lint --if-present
       - run: npm test --if-present -- --ci
+
+      # Web をビルド（dist 作成）
       - run: npm run build
 
       - name: Upload build artifact
