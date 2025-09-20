@@ -4,14 +4,8 @@
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
-      {
-        "source": "/api/**",
-        "function": "rewrite"
-      },
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
+      { "source": "/api/**", "function": "rewrite" },
+      { "source": "**", "destination": "/index.html" }
     ]
   },
   "functions": {
