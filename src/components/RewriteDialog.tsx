@@ -85,6 +85,12 @@ export default function RewriteDialog({
 
             {candidate && !loading && (
               <>
+                <Button
+                  variant="outline"
+                  onClick={() => navigator.clipboard.writeText(candidate)}
+                >
+                  コピー
+                </Button>
                 <Button onClick={() => onReplace(candidate)}>差し替え</Button>
               </>
             )}
