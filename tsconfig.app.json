@@ -24,12 +24,12 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
 
-    /* ★ 追加：alias をここでも有効にする & Vite 型 */
+    /* alias をここでも有効にする */
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
     "types": ["vite/client"]
   },
-  "include": ["src"]
+  "include": ["src", "functions/src/rewrite.ts"]
 }

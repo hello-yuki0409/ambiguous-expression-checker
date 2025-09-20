@@ -6,12 +6,12 @@ type SortMode = "order" | "category" | "frequency";
 type Props = {
   findings: Finding[];
   onJump?: (offset: number) => void;
+  onSelect?: (f: Finding) => void; // 候補モーダルを開く用
 };
 
-export default function FindingsPanel({ findings, onJump }: Props) {
+export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
   const [sort, setSort] = useState<SortMode>("order");
 
-  // ソート関数を切り替え時だけ適用する
   const sortFindings = (list: Finding[], mode: SortMode) => {
     if (mode === "order") return list;
 
@@ -59,22 +59,32 @@ export default function FindingsPanel({ findings, onJump }: Props) {
       </div>
 
       {sorted.map((f, i) => (
-        <button
+        <div
           key={`${f.start}-${i}`}
-          className="w-full text-left p-2 rounded-md border hover:bg-muted/40 transition"
-          onClick={() => onJump?.(f.start)}
-          title={f.reason ?? "曖昧な表現"}
+          className="w-full p-2 rounded-md border hover:bg-muted/40 transition flex items-center justify-between gap-2"
         >
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block w-2 h-2 rounded-full sev-${f.severity}`}
-            />
-            <span className="font-mono text-[11px] opacity-70">
-              [{f.category}]
-            </span>
-            <span className="truncate">{f.text}</span>
-          </div>
-        </button>
+          <button
+            className="text-left flex-1"
+            onClick={() => onJump?.(f.start)}
+            title={f.reason ?? "曖昧な表現"}
+          >
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block w-2 h-2 rounded-full sev-${f.severity}`}
+              />
+              <span className="font-mono text-[11px] opacity-70">
+                [{f.category}]
+              </span>
+              <span className="truncate">{f.text}</span>
+            </div>
+          </button>
+          <button
+            className="text-xs px-2 py-1 border rounded hover:bg-muted"
+            onClick={() => onSelect?.(f)} // ここで候補モーダルを開く
+          >
+            候補
+          </button>
+        </div>
       ))}
     </div>
   );

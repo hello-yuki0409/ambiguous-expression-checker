@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import EditorCore, { type OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import FindingsPanel from "@/components/FindingsPanel";
+import RewriteDialog from "@/components/RewriteDialog";
 import { detect, type Finding } from "@/lib/detection";
 import { defaultPatterns } from "@/lib/patterns";
 import { Button } from "@/components/ui/button";
@@ -11,8 +12,6 @@ import {
   clearHistory,
   type RunHistory,
 } from "@/lib/history";
-
-// 👇 AlertDialog を利用して中央表示
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +34,10 @@ export default function Editor() {
   const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
   const [openDelete, setOpenDelete] = useState(false);
 
+  // 👇 Phase3 用 state
+  const [selected, setSelected] = useState<Finding | null>(null);
+  const [tone, setTone] = useState<"敬体" | "常体">("敬体");
+
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
   const decorationsRef =
@@ -47,7 +50,7 @@ export default function Editor() {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (err) {
-      console.warn("Failed to clear content from localStorage:", err);
+      console.warn("Failed to clear content:", err);
     }
     clearHistory();
     setHistory([]);
@@ -137,6 +140,22 @@ export default function Editor() {
     editor.focus();
   };
 
+  const replaceSelected = (newText: string) => {
+    if (!selected) return;
+    const before = content.slice(0, selected.start);
+    const after = content.slice(selected.end);
+    const next = before + newText + after;
+    setContent(next);
+    setSelected(null);
+
+    // 差し替え直後に再チェックする処理
+    const t0 = performance.now();
+    const result = detect(next, defaultPatterns);
+    const elapsed = Math.round(performance.now() - t0);
+    setFindings(result);
+    setMs(elapsed);
+  };
+
   return (
     <div className="grid grid-cols-12 gap-4 p-6">
       <div className="col-span-8">
@@ -148,6 +167,15 @@ export default function Editor() {
             <Button variant="outline" onClick={clearAll}>
               クリア
             </Button>
+            <select
+              value={tone}
+              onChange={(e) => setTone(e.target.value as "敬体" | "常体")}
+              className="border rounded-md px-2 py-1 text-xs"
+              aria-label="tone"
+            >
+              <option value="敬体">敬体</option>
+              <option value="常体">常体</option>
+            </select>
             <Button onClick={runCheck}>チェック</Button>
           </div>
         </div>
@@ -169,9 +197,13 @@ export default function Editor() {
 
       <div className="col-span-4">
         <h2 className="font-semibold mb-2">検出一覧（{findings.length}件）</h2>
-        <FindingsPanel findings={findings} onJump={jumpTo} />
+        <FindingsPanel
+          findings={findings}
+          onJump={jumpTo}
+          onSelect={(f) => setSelected(f)} // 候補を開く
+        />
         <p className="text-xs text-muted-foreground mt-3">
-          項目クリックで本文へジャンプ。
+          項目クリックで本文へジャンプ。「候補」でリライト表示
         </p>
 
         <div className="mt-6 border-t pt-3">
@@ -242,6 +274,15 @@ export default function Editor() {
           )}
         </div>
       </div>
+
+      {/* 候補モーダル */}
+      <RewriteDialog
+        open={!!selected}
+        onOpenChange={(v) => !v && setSelected(null)}
+        original={selected?.text ?? ""}
+        style={tone}
+        onReplace={replaceSelected}
+      />
     </div>
   );
 }
