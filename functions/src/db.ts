@@ -1,7 +1,19 @@
-import * as dotenv from "dotenv";
-if (process.env.FUNCTIONS_EMULATOR) dotenv.config({ path: ".env.local" });
-
 import { PrismaClient } from "@prisma/client";
-const g = global as unknown as { prisma?: PrismaClient };
-export const prisma = g.prisma ?? new PrismaClient();
-if (process.env.FUNCTIONS_EMULATOR) g.prisma = prisma;
+
+// Functions のホットリロード対策（多重生成を防ぐ）
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient({
+    datasources: {
+      db: {
+        // functions/.env.local の DATABASE_URL（pooler:6543）を使う
+        url: process.env.DATABASE_URL,
+      },
+    },
+  });
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}

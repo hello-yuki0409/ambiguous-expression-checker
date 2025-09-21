@@ -1,33 +1,42 @@
 import { onRequest } from "firebase-functions/v2/https";
 import type { Request, Response } from "express";
+import { prisma } from "./db";
 
 export const versions = onRequest(
-  { cors: true },
-  async (req: Request, res: Response): Promise<void> => {
+  { cors: true, timeoutSeconds: 30 },
+  async (req: Request, res: Response) => {
     try {
       if (req.method === "GET") {
-        // まずは疎通用のダミー
-        res.status(200).json({ items: [] });
-        return;
+        const items = await prisma.articleVersion.findMany({
+          orderBy: { createdAt: "desc" },
+          take: 50,
+          select: { id: true, title: true, createdAt: true },
+        });
+        res.json({ items });
+        return; // Promise<void>
       }
 
       if (req.method === "POST") {
-        const { content } = req.body as { content: string };
-        if (!content) {
+        const { title, content } = req.body as {
+          title?: string;
+          content?: string;
+        };
+        if (!content || content.trim().length === 0) {
           res.status(400).json({ error: "content is required" });
           return;
         }
-        // v0 はまず疎通だけ
-        res.status(200).json({ ok: true });
+        const created = await prisma.articleVersion.create({
+          data: { title: title ?? null, content },
+          select: { id: true, title: true, createdAt: true },
+        });
+        res.json({ item: created });
         return;
       }
 
-      res.status(405).end();
-      return;
+      res.status(405).end(); // method not allowed
     } catch (e) {
       console.error(e);
       res.status(500).json({ error: "internal_error" });
-      return;
     }
   }
 );
