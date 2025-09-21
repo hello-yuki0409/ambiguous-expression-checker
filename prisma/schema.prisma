@@ -48,3 +48,95 @@ model users {
   created_at  DateTime? @default(now()) @db.Timestamptz(6)
 }
 
+enum AimaiCategory {
+  HEDGING        // 推量・断定回避（例: かもしれない、と思われる）
+  VAGUE          // ぼかし（例: など、ある程度、いくつか）
+  QUANTITY       // 数量曖昧（例: 多数、少数、いくつか）
+  RESPONSIBILITY // 責任回避（例: 〜とされています）
+  OTHER
+}
+
+model User {
+  id          String   @id @db.VarChar(128) // Firebase UID（匿名Auth想定）
+  authorLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles    Article[]
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions  ArticleVersion[]
+
+  @@index([authorId])
+}
+
+model ArticleVersion {
+  id        String   @id @default(cuid())
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id])
+  index     Int      // 0,1,2,...（記事内の連番）
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  checkRuns CheckRun[]
+
+  @@index([articleId])
+  @@unique([articleId, index]) // 1記事内でインデックス重複を防ぐ
+}
+
+model CheckRun {
+  id           String   @id @default(cuid())
+  versionId    String
+  version      ArticleVersion @relation(fields: [versionId], references: [id])
+  dictionaryId String?  // v0: null=デフォ辞書
+  aimaiScore   Float    // 件数/1000字
+  totalCount   Int
+  createdAt    DateTime @default(now())
+
+  findings     Finding[]
+
+  @@index([versionId])
+}
+
+model Finding {
+  id          String        @id @default(cuid())
+  runId       String
+  run         CheckRun      @relation(fields: [runId], references: [id])
+
+  // 本文 content の UTF-16 code unit offset
+  start       Int
+  end         Int
+
+  matchedText String
+  category    AimaiCategory
+  severity    Int           // 1..3
+  reason      String?
+
+  patternId   String?       // どのパターンに一致したか（v0はoptional）
+  createdAt   DateTime      @default(now())
+
+  @@index([runId])
+  @@index([patternId])
+}
+
+model AimaiPattern {
+  id          String        @id @default(cuid())
+  name        String
+  regex       String        // JS互換パターン
+  flags       String?       // 例: "g"
+  category    AimaiCategory
+  severity    Int           // 1..3
+  explanation String?
+
+  enabled     Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
