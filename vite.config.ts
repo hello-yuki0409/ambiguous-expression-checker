@@ -15,4 +15,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      // /api 配下のリクエストを Functions Emulator に転送
+      "/api": {
+        target:
+          "http://127.0.0.1:5001/ambiguous-expression-checker/us-central1",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ""),
+      },
+    },
+  },
 });
