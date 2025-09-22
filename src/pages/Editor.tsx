@@ -12,6 +12,7 @@ import {
   clearHistory,
   type RunHistory,
 } from "@/lib/history";
+import { saveVersion } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,11 +25,27 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const STORAGE_KEY = "aimai__lastContent";
+const TITLE_KEY = "aimai__articleTitle";
+const ARTICLE_ID_KEY = "aimai__articleId";
 
 export default function Editor() {
   const [content, setContent] = useState<string>(
     () => localStorage.getItem(STORAGE_KEY) ?? ""
   );
+  const [title, setTitle] = useState<string>(() => {
+    try {
+      return localStorage.getItem(TITLE_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [articleId, setArticleId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(ARTICLE_ID_KEY);
+    } catch {
+      return null;
+    }
+  });
   const [findings, setFindings] = useState<Finding[]>([]);
   const [ms, setMs] = useState<number>(0);
   const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
@@ -37,6 +54,9 @@ export default function Editor() {
   // 👇 Phase3 用 state
   const [selected, setSelected] = useState<Finding | null>(null);
   const [tone, setTone] = useState<"敬体" | "常体">("敬体");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const monacoRef = useRef<typeof monaco | null>(null);
@@ -45,10 +65,16 @@ export default function Editor() {
 
   const clearAll = () => {
     setContent("");
+    setTitle("");
+    setArticleId(null);
     setFindings([]);
     setMs(0);
+    setSaveError(null);
+    setSaveMessage(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(TITLE_KEY);
+      localStorage.removeItem(ARTICLE_ID_KEY);
     } catch (err) {
       console.warn("Failed to clear content:", err);
     }
@@ -94,19 +120,30 @@ export default function Editor() {
     };
   }, [decorations]);
 
+  useEffect(() => {
+    if (!saveMessage) return;
+    const timer = window.setTimeout(() => setSaveMessage(null), 2500);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [saveMessage]);
+
   const onMount: OnMount = (editor, monacoApi) => {
     editorRef.current = editor;
     monacoRef.current = monacoApi;
   };
 
-  const runCheck = () => {
+  const evaluateContent = (value: string) => {
     const t0 = performance.now();
-    const result = detect(content, defaultPatterns);
-    const t1 = performance.now();
-    const elapsed = Math.round(t1 - t0);
-
+    const result = detect(value, defaultPatterns);
+    const elapsed = Math.round(performance.now() - t0);
     setFindings(result);
     setMs(elapsed);
+    return { result, elapsed };
+  };
+
+  const runCheck = () => {
+    const { result, elapsed } = evaluateContent(content);
     try {
       localStorage.setItem(STORAGE_KEY, content);
     } catch (err) {
@@ -128,6 +165,64 @@ export default function Editor() {
       topWords,
     };
     setHistory(pushHistory(record));
+  };
+
+  const handleSave = async () => {
+    if (!content.trim()) {
+      setSaveError("本文が空です");
+      return;
+    }
+
+    setSaving(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    const { result } = evaluateContent(content);
+    try {
+      try {
+        localStorage.setItem(STORAGE_KEY, content);
+      } catch (err) {
+        console.warn("Failed to save content:", err);
+      }
+
+      const response = await saveVersion({
+        articleId: articleId ?? undefined,
+        title: title.trim() ? title.trim() : null,
+        content,
+        findings: result.map((f) => ({
+          start: f.start,
+          end: f.end,
+          category: f.category,
+          severity: f.severity,
+          text: f.text,
+          reason: f.reason ?? null,
+          patternId: f.patternId ?? null,
+        })),
+      });
+
+      if (response.article.id !== articleId) {
+        setArticleId(response.article.id);
+        try {
+          localStorage.setItem(ARTICLE_ID_KEY, response.article.id);
+        } catch (err) {
+          console.warn("Failed to persist article id:", err);
+        }
+      }
+
+      if (response.article.title && response.article.title !== title) {
+        setTitle(response.article.title);
+        try {
+          localStorage.setItem(TITLE_KEY, response.article.title);
+        } catch (err) {
+          console.warn("Failed to persist title:", err);
+        }
+      }
+
+      setSaveMessage("保存しました");
+    } catch (err) {
+      setSaveError((err as Error).message || "保存に失敗しました");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const jumpTo = (offset: number) => {
@@ -156,14 +251,39 @@ export default function Editor() {
     setMs(elapsed);
   };
 
+  const handleTitleChange = (value: string) => {
+    setTitle(value);
+    try {
+      localStorage.setItem(TITLE_KEY, value);
+    } catch (err) {
+      console.warn("Failed to persist title:", err);
+    }
+  };
+
   return (
     <div className="grid grid-cols-12 gap-4 p-6">
       <div className="col-span-8">
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            記事タイトル
+          </label>
+          <input
+            value={title}
+            onChange={(e) => handleTitleChange(e.target.value)}
+            placeholder="記事タイトル（任意）"
+            className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-300"
+          />
+          {articleId && (
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Article ID: {articleId}
+            </p>
+          )}
+        </div>
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm opacity-70">
             検出時間: <span className="font-mono">{ms}ms</span>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             <Button variant="outline" onClick={clearAll}>
               クリア
             </Button>
@@ -177,8 +297,20 @@ export default function Editor() {
               <option value="常体">常体</option>
             </select>
             <Button onClick={runCheck}>チェック</Button>
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? "保存中..." : "保存"}
+            </Button>
           </div>
         </div>
+        {(saveError || saveMessage) && (
+          <div className="mb-2 text-sm">
+            {saveError ? (
+              <p className="text-red-600">{saveError}</p>
+            ) : (
+              <p className="text-green-600">{saveMessage}</p>
+            )}
+          </div>
+        )}
         <EditorCore
           height="70vh"
           defaultLanguage="markdown"
