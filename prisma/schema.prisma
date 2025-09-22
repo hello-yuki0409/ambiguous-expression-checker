@@ -53,12 +53,98 @@ model users {
 /**
  * 新規に追加したいテーブルだけ（article_versions）
  */
+/**
+ * Phase4 で利用するテーブル
+ */
+
+enum AimaiCategory {
+  HEDGING
+  VAGUE
+  QUANTITY
+  RESPONSIBILITY
+  OTHER
+}
+
+model User {
+  id          String   @id @db.VarChar(128)
+  authorLabel String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  articles    Article[]
+}
+
+model Article {
+  id        String   @id @default(cuid())
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions ArticleVersion[]
+}
+
 model ArticleVersion {
   id        String   @id @default(cuid())
+  articleId String
+  article   Article  @relation(fields: [articleId], references: [id])
+  index     Int
   title     String?
   content   String   @db.Text
   createdAt DateTime @default(now())
 
+  checkRuns CheckRun[]
+
   @@index([createdAt], map: "article_versions_created_at_idx")
+  @@unique([articleId, index], map: "article_versions_article_index_key")
   @@map("article_versions")
+}
+
+model CheckRun {
+  id           String         @id @default(cuid())
+  versionId    String
+  version      ArticleVersion @relation(fields: [versionId], references: [id])
+  dictionaryId String?
+  aimaiScore   Float
+  totalCount   Int
+  charLength   Int
+  createdAt    DateTime       @default(now())
+
+  findings Finding[]
+
+  @@index([createdAt], map: "check_runs_created_at_idx")
+  @@map("check_runs")
+}
+
+model Finding {
+  id          String        @id @default(cuid())
+  runId       String
+  run         CheckRun      @relation(fields: [runId], references: [id])
+  start       Int
+  end         Int
+  matchedText String
+  category    AimaiCategory
+  severity    Int
+  reason      String?
+  patternId   String?
+  createdAt   DateTime      @default(now())
+
+  @@index([runId], map: "findings_run_id_idx")
+  @@map("findings")
+}
+
+model AimaiPattern {
+  id          String        @id @default(cuid())
+  name        String
+  regex       String
+  flags       String?
+  category    AimaiCategory
+  severity    Int
+  explanation String?
+  enabled     Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("aimai_patterns")
 }
