@@ -6,11 +6,16 @@
   "engines": {
     "node": "20"
   },
+  "prisma": {
+    "schema": "../prisma/schema.prisma"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "prebuild": "prisma generate",
+    "build": "tsc -p tsconfig.json",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.2",
+    "@prisma/client": "6.16.2",
     "dotenv": "^16.6.1",
     "firebase-admin": "^12.7.0",
     "firebase-functions": "^5.1.0",
@@ -18,7 +23,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.2",
-    "prisma": "^6.16.2",
+    "prisma": "6.16.2",
     "typescript": "^5.4.5"
   }
 }
