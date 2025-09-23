@@ -106,7 +106,18 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 });
                 return;
             }
-            const articles = await storage_1.storageManager.listArticles();
+            const toNumberParam = (value) => {
+                if (typeof value === "string" && value.trim().length > 0) {
+                    const parsed = Number(value);
+                    return Number.isFinite(parsed) ? parsed : null;
+                }
+                return null;
+            };
+            const parsedTake = toNumberParam(req.query.take);
+            const parsedSkip = toNumberParam(req.query.skip);
+            const take = Math.min(100, Math.max(1, parsedTake ?? 20));
+            const skip = Math.max(0, parsedSkip ?? 0);
+            const articles = await storage_1.storageManager.listArticles(take, skip);
             const payload = articles.map((article) => {
                 const [latest, previous] = article.versions;
                 return {

@@ -158,7 +158,20 @@ export const versions = onRequest(
           return;
         }
 
-        const articles = await storageManager.listArticles();
+        const toNumberParam = (value: unknown): number | null => {
+          if (typeof value === "string" && value.trim().length > 0) {
+            const parsed = Number(value);
+            return Number.isFinite(parsed) ? parsed : null;
+          }
+          return null;
+        };
+
+        const parsedTake = toNumberParam(req.query.take);
+        const parsedSkip = toNumberParam(req.query.skip);
+        const take = Math.min(100, Math.max(1, parsedTake ?? 20));
+        const skip = Math.max(0, parsedSkip ?? 0);
+
+        const articles = await storageManager.listArticles(take, skip);
 
         const payload = articles.map((article) => {
           const [latest, previous] = article.versions;

@@ -80,9 +80,11 @@ function mapArticle(raw, options) {
     };
 }
 class PrismaStorage {
-    async listArticles() {
+    async listArticles(take, skip) {
         const rows = (await db_1.prisma.article.findMany({
             orderBy: { updatedAt: "desc" },
+            skip,
+            take,
             select: {
                 id: true,
                 title: true,
@@ -104,6 +106,7 @@ class PrismaStorage {
                                 id: true,
                                 aimaiScore: true,
                                 totalCount: true,
+                                charLength: true,
                                 createdAt: true,
                             },
                         },
@@ -136,6 +139,7 @@ class PrismaStorage {
                                 id: true,
                                 aimaiScore: true,
                                 totalCount: true,
+                                charLength: true,
                                 createdAt: true,
                             },
                         },
@@ -164,6 +168,7 @@ class PrismaStorage {
                         id: true,
                         aimaiScore: true,
                         totalCount: true,
+                        charLength: true,
                         createdAt: true,
                         findings: {
                             orderBy: { start: "asc" },
@@ -301,9 +306,10 @@ class MemoryStorage {
         this.articles.set(id, article);
         return article;
     }
-    async listArticles() {
+    async listArticles(take, skip) {
         const rows = [...this.articles.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-        return rows.map((article) => ({
+        const sliced = rows.slice(skip, skip + take);
+        return sliced.map((article) => ({
             id: article.id,
             title: article.title,
             createdAt: article.createdAt,
@@ -480,8 +486,8 @@ class StorageManager {
             throw error;
         }
     }
-    listArticles() {
-        return this.run(() => this.prismaAdapter.listArticles(), () => this.memoryAdapter.listArticles());
+    listArticles(take, skip) {
+        return this.run(() => this.prismaAdapter.listArticles(take, skip), () => this.memoryAdapter.listArticles(take, skip));
     }
     getArticle(articleId) {
         return this.run(() => this.prismaAdapter.getArticle(articleId), () => this.memoryAdapter.getArticle(articleId));
