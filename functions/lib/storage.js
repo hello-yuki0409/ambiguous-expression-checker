@@ -448,6 +448,105 @@ class MemoryStorage {
             },
         };
     }
+    upsertSnapshot(snapshot) {
+        const storedVersion = {
+            id: snapshot.version.id,
+            index: snapshot.version.index,
+            title: snapshot.version.title,
+            content: snapshot.content,
+            createdAt: snapshot.version.createdAt,
+            article: { id: snapshot.article.id, title: snapshot.article.title },
+            checkRuns: [
+                {
+                    id: snapshot.checkRun.id,
+                    aimaiScore: snapshot.checkRun.aimaiScore,
+                    totalCount: snapshot.checkRun.totalCount,
+                    charLength: snapshot.checkRun.charLength,
+                    createdAt: snapshot.checkRun.createdAt,
+                    findings: snapshot.findings.map((f) => ({
+                        id: (0, crypto_1.randomUUID)(),
+                        start: f.start,
+                        end: f.end,
+                        matchedText: f.matchedText ?? "",
+                        category: String(f.category),
+                        severity: Number(f.severity ?? 1),
+                        reason: f.reason ?? null,
+                        patternId: f.patternId ?? null,
+                    })),
+                },
+            ],
+        };
+        this.hydrateArticles([
+            {
+                id: snapshot.article.id,
+                title: snapshot.article.title,
+                createdAt: snapshot.article.createdAt,
+                updatedAt: snapshot.article.updatedAt,
+                versions: [storedVersion],
+            },
+        ]);
+        this.hydrateVersionDetails(storedVersion);
+    }
+    hydrateArticles(articles) {
+        articles.forEach((articleData) => {
+            const target = this.ensureArticle(articleData.id, articleData.title ?? null);
+            target.title = articleData.title ?? null;
+            target.createdAt = articleData.createdAt;
+            target.updatedAt = articleData.updatedAt;
+            const versions = (articleData.versions ?? [])
+                .slice()
+                .sort((a, b) => a.index - b.index)
+                .map((version) => this.toMemoryVersion(version, false));
+            if (versions.length > 0) {
+                target.versions = versions;
+            }
+        });
+    }
+    hydrateVersionDetails(version) {
+        const articleInfo = version.article;
+        if (!articleInfo)
+            return;
+        const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null);
+        target.updatedAt = version.createdAt;
+        const memoryVersion = this.toMemoryVersion(version, true);
+        const index = target.versions.findIndex((v) => v.id === memoryVersion.id);
+        if (index >= 0) {
+            target.versions[index] = memoryVersion;
+        }
+        else {
+            target.versions.push(memoryVersion);
+        }
+        target.versions.sort((a, b) => a.index - b.index);
+    }
+    toMemoryVersion(version, includeFindings) {
+        const runs = (version.checkRuns ?? []).map((run) => ({
+            id: run.id,
+            aimaiScore: run.aimaiScore,
+            totalCount: run.totalCount,
+            charLength: run.charLength,
+            createdAt: run.createdAt,
+            findings: includeFindings
+                ? (run.findings ?? []).map((f) => ({
+                    id: f.id ?? (0, crypto_1.randomUUID)(),
+                    start: f.start,
+                    end: f.end,
+                    matchedText: f.matchedText,
+                    category: String(f.category),
+                    severity: f.severity,
+                    reason: f.reason ?? null,
+                    patternId: f.patternId ?? null,
+                }))
+                : [],
+        }));
+        return {
+            id: version.id,
+            index: version.index ?? 0,
+            title: version.title ?? null,
+            content: version.content ?? "",
+            createdAt: version.createdAt,
+            checkRuns: runs,
+        };
+    }
 }
 function isPrismaInitializationError(error) {
     if (!error)
@@ -459,7 +558,7 @@ function isPrismaInitializationError(error) {
 }
 class StorageManager {
     constructor() {
-        this.useMemory = process.env.USE_IN_MEMORY_STORAGE === "true";
+        this.preferMemory = process.env.USE_IN_MEMORY_STORAGE === "true";
         this.prismaAdapter = new PrismaStorage();
         this.memoryAdapter = new MemoryStorage();
         this.warned = false;
@@ -470,33 +569,62 @@ class StorageManager {
         this.warned = true;
         console.warn("[storage] Falling back to in-memory storage. Set USE_IN_MEMORY_STORAGE=true to silence this message.", error);
     }
-    async run(operation, fallback) {
-        if (this.useMemory) {
-            return fallback();
+    async tryPrisma(operation) {
+        if (this.preferMemory) {
+            return null;
         }
         try {
             return await operation();
         }
         catch (error) {
             if (isPrismaInitializationError(error)) {
-                this.useMemory = true;
                 this.logFallback(error);
-                return fallback();
+                return null;
             }
             throw error;
         }
     }
-    listArticles(take, skip) {
-        return this.run(() => this.prismaAdapter.listArticles(take, skip), () => this.memoryAdapter.listArticles(take, skip));
+    async listArticles(take, skip) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.listArticles(take, skip));
+        if (dbResult && (!this.preferMemory || dbResult.length > 0)) {
+            this.memoryAdapter.hydrateArticles(dbResult);
+            return dbResult;
+        }
+        const memoryResult = await this.memoryAdapter.listArticles(take, skip);
+        if (memoryResult.length > 0) {
+            return memoryResult;
+        }
+        return dbResult ?? memoryResult;
     }
-    getArticle(articleId) {
-        return this.run(() => this.prismaAdapter.getArticle(articleId), () => this.memoryAdapter.getArticle(articleId));
+    async getArticle(articleId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getArticle(articleId));
+        if (dbResult) {
+            this.memoryAdapter.hydrateArticles([dbResult]);
+            return dbResult;
+        }
+        return this.memoryAdapter.getArticle(articleId);
     }
-    getVersion(versionId) {
-        return this.run(() => this.prismaAdapter.getVersion(versionId), () => this.memoryAdapter.getVersion(versionId));
+    async getVersion(versionId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getVersion(versionId));
+        if (dbResult) {
+            this.memoryAdapter.hydrateVersionDetails(dbResult);
+            return dbResult;
+        }
+        return this.memoryAdapter.getVersion(versionId);
     }
-    saveVersion(payload) {
-        return this.run(() => this.prismaAdapter.saveVersion(payload), () => this.memoryAdapter.saveVersion(payload));
+    async saveVersion(payload) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.saveVersion(payload));
+        if (dbResult) {
+            this.memoryAdapter.upsertSnapshot({
+                article: dbResult.articleRecord,
+                version: dbResult.version,
+                checkRun: dbResult.checkRun,
+                content: payload.content,
+                findings: payload.cleanFindings,
+            });
+            return dbResult;
+        }
+        return this.memoryAdapter.saveVersion(payload);
     }
 }
 exports.StorageManager = StorageManager;
