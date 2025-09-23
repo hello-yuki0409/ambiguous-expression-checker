@@ -26,3 +26,7 @@ dist-ssr
 # .envファイルがpushされないようにする
 /.env
 /generated/prisma
+
+.env.local
+prisma/.env
+functions/.env

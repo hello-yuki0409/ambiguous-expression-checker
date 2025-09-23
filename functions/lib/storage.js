@@ -187,7 +187,7 @@ class PrismaStorage {
         return mapVersion(row, { includeContent: true, includeFindings: true });
     }
     async saveVersion(payload) {
-        const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore } = payload;
+        const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
         const result = await db_1.prisma.$transaction(async (tx) => {
             let articleRecord = articleId
                 ? (await tx.article.findUnique({
@@ -229,6 +229,7 @@ class PrismaStorage {
                     dictionaryId: null,
                     aimaiScore,
                     totalCount,
+                    charLength,
                     findings: cleanFindings.length
                         ? {
                             create: cleanFindings.map((f) => ({ ...f })),
@@ -246,8 +247,12 @@ class PrismaStorage {
             articleRecord: {
                 id: result.articleRecord.id,
                 title: toNullableString(result.articleRecord.title),
-                createdAt: toDate(result.articleRecord.createdAt ?? result.articleRecord.created_at ?? null),
-                updatedAt: toDate(result.articleRecord.updatedAt ?? result.articleRecord.updated_at ?? null),
+                createdAt: toDate(result.articleRecord.createdAt ??
+                    result.articleRecord.created_at ??
+                    null),
+                updatedAt: toDate(result.articleRecord.updatedAt ??
+                    result.articleRecord.updated_at ??
+                    null),
             },
             version: {
                 id: result.version.id,
@@ -377,7 +382,7 @@ class MemoryStorage {
         return null;
     }
     async saveVersion(payload) {
-        const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore } = payload;
+        const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
         const article = this.ensureArticle(articleId ?? null, title);
         const versionIndex = article.versions.length;
         const versionId = (0, crypto_1.randomUUID)();

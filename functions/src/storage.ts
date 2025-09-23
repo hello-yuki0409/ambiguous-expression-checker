@@ -1,8 +1,16 @@
 import { randomUUID } from "crypto";
-import type { Prisma } from "@prisma/client";
+import type { Prisma, AimaiCategory } from "@prisma/client";
 import { prisma } from "./db";
 
-export type CleanFinding = Prisma.FindingCreateWithoutRunInput;
+export type CleanFinding = {
+  start: number;
+  end: number;
+  matchedText: string;
+  category: AimaiCategory | string;
+  severity: number;
+  reason?: string | null;
+  patternId?: string | null;
+};
 
 export type StoredFinding = {
   id: string;
@@ -341,76 +349,94 @@ class PrismaStorage implements StorageAdapter {
   }
 
   async saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult> {
-    const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore } = payload;
+    const {
+      articleId,
+      title,
+      content,
+      cleanFindings,
+      charLength,
+      totalCount,
+      aimaiScore,
+    } = payload;
 
-    const result = await prisma.$transaction(async (tx) => {
-      let articleRecord =
-        articleId
+    const result = await prisma.$transaction(
+      async (tx: Prisma.TransactionClient) => {
+        let articleRecord = articleId
           ? ((await tx.article.findUnique({
               where: { id: articleId },
             } as unknown as Parameters<typeof tx.article.findUnique>[0])) as RawArticle | null)
           : null;
 
-      if (articleId && !articleRecord) {
-        throw new Error("article_not_found");
-      }
+        if (articleId && !articleRecord) {
+          throw new Error("article_not_found");
+        }
 
-      if (!articleRecord) {
-        articleRecord = (await tx.article.create({
-          data: { title },
-        } as unknown as Parameters<typeof tx.article.create>[0])) as RawArticle;
-      } else if (title && articleRecord.title !== title) {
-        articleRecord = (await tx.article.update({
+        if (!articleRecord) {
+          articleRecord = (await tx.article.create({
+            data: { title },
+          } as unknown as Parameters<typeof tx.article.create>[0])) as RawArticle;
+        } else if (title && articleRecord.title !== title) {
+          articleRecord = (await tx.article.update({
+            where: { id: articleRecord.id },
+            data: { title },
+          } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+        }
+
+        const index = await tx.articleVersion.count({
+          where: { articleId: articleRecord.id },
+        });
+
+        const version = (await tx.articleVersion.create({
+          data: {
+            articleId: articleRecord.id,
+            index,
+            title: title ?? articleRecord.title ?? null,
+            content,
+          },
+        } as unknown as Parameters<typeof tx.articleVersion.create>[0])) as RawVersion;
+
+        const updatedArticle = (await tx.article.update({
           where: { id: articleRecord.id },
-          data: { title },
+          data: { updatedAt: new Date() },
         } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+
+        const checkRun = (await tx.checkRun.create({
+          data: {
+            versionId: version.id,
+            dictionaryId: null,
+            aimaiScore,
+            totalCount,
+            charLength,
+            findings: cleanFindings.length
+              ? {
+                  create: cleanFindings.map((f) => ({ ...f })),
+                }
+              : undefined,
+          },
+        } as unknown as Parameters<typeof tx.checkRun.create>[0])) as RawCheckRun;
+
+        return {
+          articleRecord: updatedArticle,
+          version,
+          checkRun,
+        };
       }
-
-      const index = await tx.articleVersion.count({
-        where: { articleId: articleRecord.id },
-      });
-
-      const version = (await tx.articleVersion.create({
-        data: {
-          articleId: articleRecord.id,
-          index,
-          title: title ?? articleRecord.title ?? null,
-          content,
-        },
-      } as unknown as Parameters<typeof tx.articleVersion.create>[0])) as RawVersion;
-
-      const updatedArticle = (await tx.article.update({
-        where: { id: articleRecord.id },
-        data: { updatedAt: new Date() },
-      } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
-
-      const checkRun = (await tx.checkRun.create({
-        data: {
-          versionId: version.id,
-          dictionaryId: null,
-          aimaiScore,
-          totalCount,
-          findings: cleanFindings.length
-            ? {
-                create: cleanFindings.map((f) => ({ ...f })),
-              }
-            : undefined,
-        },
-      } as unknown as Parameters<typeof tx.checkRun.create>[0])) as RawCheckRun;
-
-      return {
-        articleRecord: updatedArticle,
-        version,
-        checkRun,
-      };
-    });
+    );
 
     return {
       articleRecord: {
         id: result.articleRecord.id,
         title: toNullableString(result.articleRecord.title),
-        createdAt: toDate(result.articleRecord.createdAt ?? result.articleRecord.created_at ?? null),
-        updatedAt: toDate(result.articleRecord.updatedAt ?? result.articleRecord.updated_at ?? null),
+        createdAt: toDate(
+          result.articleRecord.createdAt ??
+            result.articleRecord.created_at ??
+            null
+        ),
+        updatedAt: toDate(
+          result.articleRecord.updatedAt ??
+            result.articleRecord.updated_at ??
+            null
+        ),
       },
       version: {
         id: result.version.id,
@@ -422,14 +448,18 @@ class PrismaStorage implements StorageAdapter {
         index: toNumber(result.version.index),
         title: toNullableString(result.version.title),
         content: result.version.content ?? "",
-        createdAt: toDate(result.version.createdAt ?? result.version.created_at ?? null),
+        createdAt: toDate(
+          result.version.createdAt ?? result.version.created_at ?? null
+        ),
       },
       checkRun: {
         id: result.checkRun.id,
         aimaiScore,
         totalCount,
         charLength,
-        createdAt: toDate(result.checkRun.createdAt ?? result.checkRun.created_at ?? null),
+        createdAt: toDate(
+          result.checkRun.createdAt ?? result.checkRun.created_at ?? null
+        ),
       },
     };
   }
@@ -461,7 +491,10 @@ type MemoryArticle = {
 class MemoryStorage implements StorageAdapter {
   private articles = new Map<string, MemoryArticle>();
 
-  private ensureArticle(articleId: string | null | undefined, title: string | null) {
+  private ensureArticle(
+    articleId: string | null | undefined,
+    title: string | null
+  ) {
     if (articleId) {
       const existing = this.articles.get(articleId);
       if (existing) {
@@ -570,7 +603,15 @@ class MemoryStorage implements StorageAdapter {
   }
 
   async saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult> {
-    const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore } = payload;
+    const {
+      articleId,
+      title,
+      content,
+      cleanFindings,
+      charLength,
+      totalCount,
+      aimaiScore,
+    } = payload;
 
     const article = this.ensureArticle(articleId ?? null, title);
     const versionIndex = article.versions.length;
@@ -663,7 +704,10 @@ export class StorageManager {
     );
   }
 
-  private async run<T>(operation: () => Promise<T>, fallback: () => Promise<T>): Promise<T> {
+  private async run<T>(
+    operation: () => Promise<T>,
+    fallback: () => Promise<T>
+  ): Promise<T> {
     if (this.useMemory) {
       return fallback();
     }
