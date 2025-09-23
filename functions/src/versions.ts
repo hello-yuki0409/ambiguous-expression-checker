@@ -1,6 +1,7 @@
 import { onRequest } from "firebase-functions/v2/https";
 import type { Request, Response } from "express";
-import { AimaiCategory, type Prisma } from "@prisma/client";
+import { AimaiCategory } from "@prisma/client";
+import type { CleanFinding } from "./storage";
 import { storageManager } from "./storage";
 
 type FindingPayload = {
@@ -32,7 +33,7 @@ function sanitiseFindings(raw: FindingPayload[] | null | undefined) {
   if (!Array.isArray(raw)) return [];
 
   return raw
-    .map((f): Prisma.FindingCreateWithoutRunInput | null => {
+    .map((f): CleanFinding | null => {
       if (
         typeof f.start !== "number" ||
         typeof f.end !== "number" ||
@@ -53,7 +54,7 @@ function sanitiseFindings(raw: FindingPayload[] | null | undefined) {
         patternId: f.patternId ?? null,
       };
     })
-    .filter((f): f is Prisma.FindingCreateWithoutRunInput => f !== null);
+    .filter((f): f is CleanFinding => f !== null);
 }
 
 function mapCheckRun(run: {
@@ -101,9 +102,13 @@ export const versions = onRequest(
     try {
       if (req.method === "GET") {
         const articleId =
-          typeof req.query.articleId === "string" ? req.query.articleId : undefined;
+          typeof req.query.articleId === "string"
+            ? req.query.articleId
+            : undefined;
         const versionId =
-          typeof req.query.versionId === "string" ? req.query.versionId : undefined;
+          typeof req.query.versionId === "string"
+            ? req.query.versionId
+            : undefined;
 
         if (versionId) {
           const version = await storageManager.getVersion(versionId);

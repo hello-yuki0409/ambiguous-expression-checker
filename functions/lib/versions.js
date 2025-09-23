@@ -58,8 +58,12 @@ function mapVersionSummary(version) {
 exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
         if (req.method === "GET") {
-            const articleId = typeof req.query.articleId === "string" ? req.query.articleId : undefined;
-            const versionId = typeof req.query.versionId === "string" ? req.query.versionId : undefined;
+            const articleId = typeof req.query.articleId === "string"
+                ? req.query.articleId
+                : undefined;
+            const versionId = typeof req.query.versionId === "string"
+                ? req.query.versionId
+                : undefined;
             if (versionId) {
                 const version = await storage_1.storageManager.getVersion(versionId);
                 if (!version) {
