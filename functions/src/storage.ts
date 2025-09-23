@@ -229,16 +229,18 @@ function mapArticle(
 }
 
 interface StorageAdapter {
-  listArticles(): Promise<StoredArticle[]>;
+  listArticles(take: number, skip: number): Promise<StoredArticle[]>;
   getArticle(articleId: string): Promise<StoredArticle | null>;
   getVersion(versionId: string): Promise<StoredVersion | null>;
   saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult>;
 }
 
 class PrismaStorage implements StorageAdapter {
-  async listArticles(): Promise<StoredArticle[]> {
+  async listArticles(take: number, skip: number): Promise<StoredArticle[]> {
     const rows = (await prisma.article.findMany({
       orderBy: { updatedAt: "desc" },
+      skip,
+      take,
       select: {
         id: true,
         title: true,
@@ -260,6 +262,7 @@ class PrismaStorage implements StorageAdapter {
                 id: true,
                 aimaiScore: true,
                 totalCount: true,
+                charLength: true,
                 createdAt: true,
               },
             },
@@ -296,6 +299,7 @@ class PrismaStorage implements StorageAdapter {
                 id: true,
                 aimaiScore: true,
                 totalCount: true,
+                charLength: true,
                 createdAt: true,
               },
             },
@@ -325,6 +329,7 @@ class PrismaStorage implements StorageAdapter {
             id: true,
             aimaiScore: true,
             totalCount: true,
+            charLength: true,
             createdAt: true,
             findings: {
               orderBy: { start: "asc" },
@@ -412,7 +417,7 @@ class PrismaStorage implements StorageAdapter {
                   create: cleanFindings.map((f) => ({ ...f })),
                 }
               : undefined,
-          },
+        },
         } as unknown as Parameters<typeof tx.checkRun.create>[0])) as RawCheckRun;
 
         return {
@@ -518,11 +523,12 @@ class MemoryStorage implements StorageAdapter {
     return article;
   }
 
-  async listArticles(): Promise<StoredArticle[]> {
+  async listArticles(take: number, skip: number): Promise<StoredArticle[]> {
     const rows = [...this.articles.values()].sort(
       (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
     );
-    return rows.map((article) => ({
+    const sliced = rows.slice(skip, skip + take);
+    return sliced.map((article) => ({
       id: article.id,
       title: article.title,
       createdAt: article.createdAt,
@@ -724,10 +730,10 @@ export class StorageManager {
     }
   }
 
-  listArticles() {
+  listArticles(take: number, skip: number) {
     return this.run(
-      () => this.prismaAdapter.listArticles(),
-      () => this.memoryAdapter.listArticles()
+      () => this.prismaAdapter.listArticles(take, skip),
+      () => this.memoryAdapter.listArticles(take, skip)
     );
   }
 
