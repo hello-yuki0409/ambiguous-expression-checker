@@ -261,151 +261,172 @@ export default function Editor() {
   };
 
   return (
-    <div className="grid grid-cols-12 gap-4 p-6">
-      <div className="col-span-8">
-        <div className="mb-4">
-          <label className="block text-xs font-medium text-muted-foreground mb-1">
-            記事タイトル
-          </label>
-          <input
-            value={title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            placeholder="記事タイトル（任意）"
-            className="w-full border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 focus:border-slate-300"
-          />
-          {articleId && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Article ID: {articleId}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-sm opacity-70">
-            検出時間: <span className="font-mono">{ms}ms</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            <Button variant="outline" onClick={clearAll}>
-              クリア
-            </Button>
-            <select
-              value={tone}
-              onChange={(e) => setTone(e.target.value as "敬体" | "常体")}
-              className="border rounded-md px-2 py-1 text-xs"
-              aria-label="tone"
-            >
-              <option value="敬体">敬体</option>
-              <option value="常体">常体</option>
-            </select>
-            <Button onClick={runCheck}>チェック</Button>
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? "保存中..." : "保存"}
-            </Button>
-          </div>
-        </div>
-        {(saveError || saveMessage) && (
-          <div className="mb-2 text-sm">
-            {saveError ? (
-              <p className="text-red-600">{saveError}</p>
-            ) : (
-              <p className="text-green-600">{saveMessage}</p>
+    <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
+      <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[minmax(0,1fr),320px]">
+        <section className="space-y-4 rounded-2xl border border-emerald-100 bg-white/70 p-6 shadow-sm backdrop-blur">
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium text-emerald-700">記事タイトル</label>
+              <input
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                placeholder="記事タイトル（任意）"
+                className="mt-1 w-full rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-300"
+              />
+              {articleId && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Article ID: {articleId}</p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-xs text-muted-foreground">
+                検出時間 <span className="font-mono text-sm text-emerald-700">{ms}ms</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                  onClick={clearAll}
+                >
+                  クリア
+                </Button>
+                <select
+                  value={tone}
+                  onChange={(e) => setTone(e.target.value as "敬体" | "常体")}
+                  className="rounded-lg border border-emerald-200 px-3 py-2 text-xs text-emerald-700 focus:outline-none"
+                  aria-label="tone"
+                >
+                  <option value="敬体">敬体</option>
+                  <option value="常体">常体</option>
+                </select>
+                <Button onClick={runCheck} className="bg-emerald-500 text-white hover:bg-emerald-600">
+                  チェック
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-70"
+                >
+                  {saving ? "保存中..." : "保存"}
+                </Button>
+              </div>
+            </div>
+            {(saveError || saveMessage) && (
+              <div
+                className={`rounded-xl border px-4 py-3 text-sm ${
+                  saveError
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                }`}
+              >
+                {saveError ?? saveMessage}
+              </div>
             )}
           </div>
-        )}
-        <EditorCore
-          height="70vh"
-          defaultLanguage="markdown"
-          value={content}
-          onChange={(v) => setContent(v ?? "")}
-          onMount={onMount}
-          options={{
-            wordWrap: "on",
-            minimap: { enabled: false },
-            fontSize: 14,
-            lineNumbers: "on",
-            renderWhitespace: "boundary",
-          }}
-        />
-      </div>
 
-      <div className="col-span-4">
-        <h2 className="font-semibold mb-2">検出一覧（{findings.length}件）</h2>
-        <FindingsPanel
-          findings={findings}
-          onJump={jumpTo}
-          onSelect={(f) => setSelected(f)} // 候補を開く
-        />
-        <p className="text-xs text-muted-foreground mt-3">
-          項目クリックで本文へジャンプ。「候補」でリライト表示
-        </p>
+          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px] lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-inner">
+              <EditorCore
+                height="68vh"
+                defaultLanguage="markdown"
+                value={content}
+                onChange={(v) => setContent(v ?? "")}
+                onMount={onMount}
+                options={{
+                  wordWrap: "on",
+                  minimap: { enabled: false },
+                  fontSize: 14,
+                  lineNumbers: "on",
+                  renderWhitespace: "boundary",
+                }}
+              />
+            </div>
 
-        <div className="mt-6 border-t pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold">直近履歴</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={history.length === 0}
-              onClick={() => {
-                if (history.length === 0) return;
-                setOpenDelete(true);
-              }}
-            >
-              履歴を削除
-            </Button>
+            <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-semibold text-emerald-700">
+                  検出一覧（{findings.length}件）
+                </h2>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-medium text-emerald-700">
+                  {tone}
+                </span>
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                項目をクリックすると該当位置へジャンプし、「候補」ボタンでリライトを確認できます。
+              </p>
+              <div className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
+                <FindingsPanel
+                  findings={findings}
+                  onJump={jumpTo}
+                  onSelect={(f) => setSelected(f)}
+                />
+              </div>
+            </div>
           </div>
+        </section>
 
-          {/* 削除確認モーダル */}
-          <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  直近の履歴をすべて削除しますか？
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  ⚠️この操作は取り消せません
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={() => {
-                    clearHistory();
-                    setHistory([]);
-                  }}
-                >
-                  削除する
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+        <aside>
+          <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-emerald-700">直近履歴</h3>
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                disabled={history.length === 0}
+                onClick={() => {
+                  if (history.length === 0) return;
+                  setOpenDelete(true);
+                }}
+              >
+                履歴を削除
+              </Button>
+            </div>
+            <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>直近の履歴をすべて削除しますか？</AlertDialogTitle>
+                  <AlertDialogDescription>⚠️この操作は取り消せません</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => {
+                      clearHistory();
+                      setHistory([]);
+                    }}
+                  >
+                    削除する
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-          {history.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              まだ履歴はありません
-            </p>
-          ) : (
-            <ul className="space-y-1 text-xs">
-              {history.map((h, i) => (
-                <li key={i} className="flex items-center justify-between gap-2">
-                  <span className="opacity-70">
-                    {new Date(h.ts).toLocaleString(undefined, {
-                      hour12: false,
-                    })}
-                  </span>
-                  <span className="font-mono">
-                    {h.count}件 / {h.length}字 / {h.ms}ms
-                  </span>
-                  {h.topWords.length > 0 && (
-                    <span className="truncate max-w-[140px] opacity-80">
-                      {h.topWords.join(" / ")}
+            {history.length === 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">まだ履歴はありません</p>
+            ) : (
+              <ul className="mt-3 space-y-2 text-xs">
+                {history.map((h, i) => (
+                  <li
+                    key={i}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2"
+                  >
+                    <span className="font-medium text-emerald-700">
+                      {new Date(h.ts).toLocaleString(undefined, { hour12: false })}
                     </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
+                    <span className="font-mono text-emerald-800">
+                      {h.count}件 / {h.length}字 / {h.ms}ms
+                    </span>
+                    {h.topWords.length > 0 && (
+                      <span className="truncate text-right text-[11px] text-emerald-600">
+                        {h.topWords.join(" / ")}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
 
       {/* 候補モーダル */}
       <RewriteDialog
@@ -415,6 +436,7 @@ export default function Editor() {
         style={tone}
         onReplace={replaceSelected}
       />
+      </div>
     </div>
   );
 }
