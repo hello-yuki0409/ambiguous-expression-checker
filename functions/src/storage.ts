@@ -38,13 +38,14 @@ export type StoredVersion = {
   title: string | null;
   content?: string;
   createdAt: Date;
-  article?: { id: string; title: string | null };
+  article?: { id: string; title: string | null; authorLabel: string | null };
   checkRuns: StoredCheckRun[];
 };
 
 export type StoredArticle = {
   id: string;
   title: string | null;
+  authorLabel: string | null;
   createdAt: Date;
   updatedAt: Date;
   versions: StoredVersion[];
@@ -53,6 +54,7 @@ export type StoredArticle = {
 export type SaveVersionInput = {
   articleId?: string | null;
   title: string | null;
+  authorLabel: string | null;
   content: string;
   cleanFindings: CleanFinding[];
   charLength: number;
@@ -64,6 +66,7 @@ export type SaveVersionResult = {
   articleRecord: {
     id: string;
     title: string | null;
+    authorLabel: string | null;
     createdAt: Date;
     updatedAt: Date;
   };
@@ -108,7 +111,10 @@ type RawCheckRun = {
   findings?: RawFinding[];
 };
 
-type RawArticleRef = { id: string; title?: string | null } | null | undefined;
+type RawArticleRef =
+  | { id: string; title?: string | null; authorLabel?: string | null }
+  | null
+  | undefined;
 
 type RawVersion = {
   id: string;
@@ -126,6 +132,7 @@ type RawVersion = {
 type RawArticle = {
   id: string;
   title?: string | null;
+  authorLabel?: string | null;
   createdAt?: Date | string | number | null;
   created_at?: Date | string | number | null;
   updatedAt?: Date | string | number | null;
@@ -205,7 +212,11 @@ function mapVersion(
     content: options.includeContent ? content ?? undefined : undefined,
     createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
     article: raw.article
-      ? { id: raw.article.id, title: toNullableString(raw.article.title) }
+      ? {
+          id: raw.article.id,
+          title: toNullableString(raw.article.title),
+          authorLabel: toNullableString(raw.article.authorLabel),
+        }
       : undefined,
     checkRuns: (raw.checkRuns ?? []).map((run) =>
       mapCheckRun(run, contentLength, options.includeFindings)
@@ -220,6 +231,7 @@ function mapArticle(
   return {
     id: raw.id,
     title: toNullableString(raw.title),
+    authorLabel: toNullableString(raw.authorLabel),
     createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
     updatedAt: toDate(raw.updatedAt ?? raw.updated_at ?? null),
     versions: (raw.versions ?? []).map((version) =>
@@ -244,6 +256,7 @@ class PrismaStorage implements StorageAdapter {
       select: {
         id: true,
         title: true,
+        authorLabel: true,
         createdAt: true,
         updatedAt: true,
         versions: {
@@ -282,6 +295,7 @@ class PrismaStorage implements StorageAdapter {
       select: {
         id: true,
         title: true,
+        authorLabel: true,
         createdAt: true,
         updatedAt: true,
         versions: {
@@ -321,7 +335,7 @@ class PrismaStorage implements StorageAdapter {
         title: true,
         content: true,
         createdAt: true,
-        article: { select: { id: true, title: true } },
+        article: { select: { id: true, title: true, authorLabel: true } },
         checkRuns: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -357,6 +371,7 @@ class PrismaStorage implements StorageAdapter {
     const {
       articleId,
       title,
+      authorLabel,
       content,
       cleanFindings,
       charLength,
@@ -376,15 +391,32 @@ class PrismaStorage implements StorageAdapter {
           throw new Error("article_not_found");
         }
 
+        const normalisedLabel = authorLabel ?? null;
+
         if (!articleRecord) {
           articleRecord = (await tx.article.create({
-            data: { title },
+            data: { title, authorLabel: normalisedLabel },
           } as unknown as Parameters<typeof tx.article.create>[0])) as RawArticle;
-        } else if (title && articleRecord.title !== title) {
-          articleRecord = (await tx.article.update({
-            where: { id: articleRecord.id },
-            data: { title },
-          } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+        } else {
+          const updateData: Prisma.ArticleUpdateInput = {};
+
+          if (title !== undefined && title !== articleRecord.title) {
+            updateData.title = title;
+          }
+
+          const currentLabel =
+            (articleRecord as unknown as { authorLabel?: string | null })
+              .authorLabel ?? null;
+          if (normalisedLabel !== currentLabel) {
+            updateData.authorLabel = normalisedLabel;
+          }
+
+          if (Object.keys(updateData).length > 0) {
+            articleRecord = (await tx.article.update({
+              where: { id: articleRecord.id },
+              data: updateData,
+            } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+          }
         }
 
         const index = await tx.articleVersion.count({
@@ -432,6 +464,10 @@ class PrismaStorage implements StorageAdapter {
       articleRecord: {
         id: result.articleRecord.id,
         title: toNullableString(result.articleRecord.title),
+        authorLabel: toNullableString(
+          (result.articleRecord as unknown as { authorLabel?: string | null })
+            .authorLabel ?? null
+        ),
         createdAt: toDate(
           result.articleRecord.createdAt ??
             result.articleRecord.created_at ??
@@ -489,6 +525,7 @@ type MemoryVersion = {
 type MemoryArticle = {
   id: string;
   title: string | null;
+  authorLabel: string | null;
   createdAt: Date;
   updatedAt: Date;
   versions: MemoryVersion[];
@@ -507,13 +544,17 @@ class MemoryStorage implements StorageAdapter {
 
   private ensureArticle(
     articleId: string | null | undefined,
-    title: string | null
+    title: string | null,
+    authorLabel?: string | null
   ) {
     if (articleId) {
       const existing = this.articles.get(articleId);
       if (existing) {
-        if (title && existing.title !== title) {
+        if (title !== undefined && existing.title !== title) {
           existing.title = title;
+        }
+        if (authorLabel !== undefined && existing.authorLabel !== authorLabel) {
+          existing.authorLabel = authorLabel ?? null;
         }
         return existing;
       }
@@ -524,6 +565,7 @@ class MemoryStorage implements StorageAdapter {
     const article: MemoryArticle = {
       id,
       title: title ?? null,
+      authorLabel: authorLabel ?? null,
       createdAt: now,
       updatedAt: now,
       versions: [],
@@ -540,6 +582,7 @@ class MemoryStorage implements StorageAdapter {
     return sliced.map((article) => ({
       id: article.id,
       title: article.title,
+      authorLabel: article.authorLabel,
       createdAt: article.createdAt,
       updatedAt: article.updatedAt,
       versions: article.versions
@@ -569,6 +612,7 @@ class MemoryStorage implements StorageAdapter {
     return {
       id: article.id,
       title: article.title,
+      authorLabel: article.authorLabel,
       createdAt: article.createdAt,
       updatedAt: article.updatedAt,
       versions: article.versions
@@ -602,7 +646,11 @@ class MemoryStorage implements StorageAdapter {
           title: version.title,
           content: version.content,
           createdAt: version.createdAt,
-          article: { id: article.id, title: article.title },
+          article: {
+            id: article.id,
+            title: article.title,
+            authorLabel: article.authorLabel,
+          },
           checkRuns: latest
             ? [
                 {
@@ -628,7 +676,11 @@ class MemoryStorage implements StorageAdapter {
       aimaiScore,
     } = payload;
 
-    const article = this.ensureArticle(articleId ?? null, title);
+    const article = this.ensureArticle(
+      articleId ?? null,
+      title,
+      payload.authorLabel
+    );
     const versionIndex = article.versions.length;
     const versionId = randomUUID();
     const createdAt = new Date();
@@ -672,6 +724,7 @@ class MemoryStorage implements StorageAdapter {
       articleRecord: {
         id: article.id,
         title: article.title,
+        authorLabel: article.authorLabel,
         createdAt: article.createdAt,
         updatedAt: article.updatedAt,
       },
@@ -700,7 +753,11 @@ class MemoryStorage implements StorageAdapter {
       title: snapshot.version.title,
       content: snapshot.content,
       createdAt: snapshot.version.createdAt,
-      article: { id: snapshot.article.id, title: snapshot.article.title },
+      article: {
+        id: snapshot.article.id,
+        title: snapshot.article.title,
+        authorLabel: snapshot.article.authorLabel,
+      },
       checkRuns: [
         {
           id: snapshot.checkRun.id,
@@ -726,6 +783,7 @@ class MemoryStorage implements StorageAdapter {
       {
         id: snapshot.article.id,
         title: snapshot.article.title,
+        authorLabel: snapshot.article.authorLabel,
         createdAt: snapshot.article.createdAt,
         updatedAt: snapshot.article.updatedAt,
         versions: [storedVersion],
@@ -737,8 +795,13 @@ class MemoryStorage implements StorageAdapter {
 
   hydrateArticles(articles: StoredArticle[]) {
     articles.forEach((articleData) => {
-      const target = this.ensureArticle(articleData.id, articleData.title ?? null);
+      const target = this.ensureArticle(
+        articleData.id,
+        articleData.title ?? null,
+        articleData.authorLabel ?? null
+      );
       target.title = articleData.title ?? null;
+      target.authorLabel = articleData.authorLabel ?? null;
       target.createdAt = articleData.createdAt;
       target.updatedAt = articleData.updatedAt;
 
@@ -756,7 +819,11 @@ class MemoryStorage implements StorageAdapter {
   hydrateVersionDetails(version: StoredVersion) {
     const articleInfo = version.article;
     if (!articleInfo) return;
-    const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null);
+    const target = this.ensureArticle(
+      articleInfo.id,
+      articleInfo.title ?? null,
+      articleInfo.authorLabel ?? null
+    );
     target.updatedAt = version.createdAt;
 
     const memoryVersion = this.toMemoryVersion(version, true);

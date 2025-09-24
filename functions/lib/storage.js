@@ -65,7 +65,11 @@ function mapVersion(raw, options) {
         content: options.includeContent ? content ?? undefined : undefined,
         createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
         article: raw.article
-            ? { id: raw.article.id, title: toNullableString(raw.article.title) }
+            ? {
+                id: raw.article.id,
+                title: toNullableString(raw.article.title),
+                authorLabel: toNullableString(raw.article.authorLabel),
+            }
             : undefined,
         checkRuns: (raw.checkRuns ?? []).map((run) => mapCheckRun(run, contentLength, options.includeFindings)),
     };
@@ -74,6 +78,7 @@ function mapArticle(raw, options) {
     return {
         id: raw.id,
         title: toNullableString(raw.title),
+        authorLabel: toNullableString(raw.authorLabel),
         createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
         updatedAt: toDate(raw.updatedAt ?? raw.updated_at ?? null),
         versions: (raw.versions ?? []).map((version) => mapVersion(version, options)),
@@ -88,6 +93,7 @@ class PrismaStorage {
             select: {
                 id: true,
                 title: true,
+                authorLabel: true,
                 createdAt: true,
                 updatedAt: true,
                 versions: {
@@ -122,6 +128,7 @@ class PrismaStorage {
             select: {
                 id: true,
                 title: true,
+                authorLabel: true,
                 createdAt: true,
                 updatedAt: true,
                 versions: {
@@ -160,7 +167,7 @@ class PrismaStorage {
                 title: true,
                 content: true,
                 createdAt: true,
-                article: { select: { id: true, title: true } },
+                article: { select: { id: true, title: true, authorLabel: true } },
                 checkRuns: {
                     orderBy: { createdAt: "desc" },
                     take: 1,
@@ -192,7 +199,7 @@ class PrismaStorage {
         return mapVersion(row, { includeContent: true, includeFindings: true });
     }
     async saveVersion(payload) {
-        const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
+        const { articleId, title, authorLabel, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
         const result = await db_1.prisma.$transaction(async (tx) => {
             let articleRecord = articleId
                 ? (await tx.article.findUnique({
@@ -202,16 +209,28 @@ class PrismaStorage {
             if (articleId && !articleRecord) {
                 throw new Error("article_not_found");
             }
+            const normalisedLabel = authorLabel ?? null;
             if (!articleRecord) {
                 articleRecord = (await tx.article.create({
-                    data: { title },
+                    data: { title, authorLabel: normalisedLabel },
                 }));
             }
-            else if (title && articleRecord.title !== title) {
-                articleRecord = (await tx.article.update({
-                    where: { id: articleRecord.id },
-                    data: { title },
-                }));
+            else {
+                const updateData = {};
+                if (title !== undefined && title !== articleRecord.title) {
+                    updateData.title = title;
+                }
+                const currentLabel = articleRecord
+                    .authorLabel ?? null;
+                if (normalisedLabel !== currentLabel) {
+                    updateData.authorLabel = normalisedLabel;
+                }
+                if (Object.keys(updateData).length > 0) {
+                    articleRecord = (await tx.article.update({
+                        where: { id: articleRecord.id },
+                        data: updateData,
+                    }));
+                }
             }
             const index = await tx.articleVersion.count({
                 where: { articleId: articleRecord.id },
@@ -252,6 +271,8 @@ class PrismaStorage {
             articleRecord: {
                 id: result.articleRecord.id,
                 title: toNullableString(result.articleRecord.title),
+                authorLabel: toNullableString(result.articleRecord
+                    .authorLabel ?? null),
                 createdAt: toDate(result.articleRecord.createdAt ??
                     result.articleRecord.created_at ??
                     null),
@@ -284,12 +305,15 @@ class MemoryStorage {
     constructor() {
         this.articles = new Map();
     }
-    ensureArticle(articleId, title) {
+    ensureArticle(articleId, title, authorLabel) {
         if (articleId) {
             const existing = this.articles.get(articleId);
             if (existing) {
-                if (title && existing.title !== title) {
+                if (title !== undefined && existing.title !== title) {
                     existing.title = title;
+                }
+                if (authorLabel !== undefined && existing.authorLabel !== authorLabel) {
+                    existing.authorLabel = authorLabel ?? null;
                 }
                 return existing;
             }
@@ -299,6 +323,7 @@ class MemoryStorage {
         const article = {
             id,
             title: title ?? null,
+            authorLabel: authorLabel ?? null,
             createdAt: now,
             updatedAt: now,
             versions: [],
@@ -312,6 +337,7 @@ class MemoryStorage {
         return sliced.map((article) => ({
             id: article.id,
             title: article.title,
+            authorLabel: article.authorLabel,
             createdAt: article.createdAt,
             updatedAt: article.updatedAt,
             versions: article.versions
@@ -341,6 +367,7 @@ class MemoryStorage {
         return {
             id: article.id,
             title: article.title,
+            authorLabel: article.authorLabel,
             createdAt: article.createdAt,
             updatedAt: article.updatedAt,
             versions: article.versions
@@ -373,7 +400,11 @@ class MemoryStorage {
                     title: version.title,
                     content: version.content,
                     createdAt: version.createdAt,
-                    article: { id: article.id, title: article.title },
+                    article: {
+                        id: article.id,
+                        title: article.title,
+                        authorLabel: article.authorLabel,
+                    },
                     checkRuns: latest
                         ? [
                             {
@@ -389,7 +420,7 @@ class MemoryStorage {
     }
     async saveVersion(payload) {
         const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
-        const article = this.ensureArticle(articleId ?? null, title);
+        const article = this.ensureArticle(articleId ?? null, title, payload.authorLabel);
         const versionIndex = article.versions.length;
         const versionId = (0, crypto_1.randomUUID)();
         const createdAt = new Date();
@@ -428,6 +459,7 @@ class MemoryStorage {
             articleRecord: {
                 id: article.id,
                 title: article.title,
+                authorLabel: article.authorLabel,
                 createdAt: article.createdAt,
                 updatedAt: article.updatedAt,
             },
@@ -455,7 +487,11 @@ class MemoryStorage {
             title: snapshot.version.title,
             content: snapshot.content,
             createdAt: snapshot.version.createdAt,
-            article: { id: snapshot.article.id, title: snapshot.article.title },
+            article: {
+                id: snapshot.article.id,
+                title: snapshot.article.title,
+                authorLabel: snapshot.article.authorLabel,
+            },
             checkRuns: [
                 {
                     id: snapshot.checkRun.id,
@@ -480,6 +516,7 @@ class MemoryStorage {
             {
                 id: snapshot.article.id,
                 title: snapshot.article.title,
+                authorLabel: snapshot.article.authorLabel,
                 createdAt: snapshot.article.createdAt,
                 updatedAt: snapshot.article.updatedAt,
                 versions: [storedVersion],
@@ -489,8 +526,9 @@ class MemoryStorage {
     }
     hydrateArticles(articles) {
         articles.forEach((articleData) => {
-            const target = this.ensureArticle(articleData.id, articleData.title ?? null);
+            const target = this.ensureArticle(articleData.id, articleData.title ?? null, articleData.authorLabel ?? null);
             target.title = articleData.title ?? null;
+            target.authorLabel = articleData.authorLabel ?? null;
             target.createdAt = articleData.createdAt;
             target.updatedAt = articleData.updatedAt;
             const versions = (articleData.versions ?? [])
@@ -506,7 +544,7 @@ class MemoryStorage {
         const articleInfo = version.article;
         if (!articleInfo)
             return;
-        const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null);
+        const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null, articleInfo.authorLabel ?? null);
         target.updatedAt = version.createdAt;
         const memoryVersion = this.toMemoryVersion(version, true);
         const index = target.versions.findIndex((v) => v.id === memoryVersion.id);

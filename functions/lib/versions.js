@@ -99,6 +99,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                     article: {
                         id: article.id,
                         title: article.title,
+                        authorLabel: article.authorLabel,
                         createdAt: article.createdAt,
                         updatedAt: article.updatedAt,
                         versions: article.versions.map(mapVersionSummary),
@@ -123,6 +124,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 return {
                     id: article.id,
                     title: article.title,
+                    authorLabel: article.authorLabel,
                     createdAt: article.createdAt,
                     updatedAt: article.updatedAt,
                     latest: latest ? mapVersionSummary(latest) : null,
@@ -133,7 +135,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
             return;
         }
         if (req.method === "POST") {
-            const { articleId, title, content, findings } = req.body ?? {};
+            const { articleId, title, content, findings, authorLabel } = req.body ?? {};
             if (!content || !content.trim()) {
                 res.status(400).json({ error: "content is required" });
                 return;
@@ -143,9 +145,12 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
             const totalCount = cleanFindings.length;
             const aimaiScore = charLength > 0 ? (totalCount * 1000) / charLength : 0;
             const articleTitle = title?.trim() || null;
+            const rawAuthorLabel = typeof authorLabel === "string" ? authorLabel.trim() : null;
+            const articleAuthorLabel = rawAuthorLabel || null;
             const result = await storage_1.storageManager.saveVersion({
                 articleId,
                 title: articleTitle,
+                authorLabel: articleAuthorLabel,
                 content,
                 cleanFindings,
                 charLength,
@@ -156,6 +161,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 article: {
                     id: result.articleRecord.id,
                     title: result.articleRecord.title,
+                    authorLabel: result.articleRecord.authorLabel,
                 },
                 version: {
                     id: result.version.id,
