@@ -23,6 +23,7 @@ type VersionSummary = {
 type ArticleSummary = {
   id: string;
   title: string | null;
+  authorLabel: string | null;
   createdAt: string;
   updatedAt: string;
   latest: VersionSummary | null;
@@ -32,6 +33,7 @@ type ArticleSummary = {
 type ArticleDetail = {
   id: string;
   title: string | null;
+  authorLabel: string | null;
   createdAt: string;
   updatedAt: string;
   versions: VersionSummary[];
@@ -54,13 +56,14 @@ type VersionDetail = {
   title: string | null;
   content: string;
   createdAt: string;
-  article: { id: string; title: string | null };
+  article: { id: string; title: string | null; authorLabel: string | null };
   checkRun: (CheckRunSummary & { findings: FindingDetail[] }) | null;
 };
 
 type SaveVersionRequest = {
   articleId?: string | null;
   title?: string | null;
+  authorLabel?: string | null;
   content: string;
   findings: Array<
     Pick<Finding, "start" | "end" | "category" | "severity"> & {
@@ -72,7 +75,7 @@ type SaveVersionRequest = {
 };
 
 type SaveVersionResponse = {
-  article: { id: string; title: string | null };
+  article: { id: string; title: string | null; authorLabel: string | null };
   version: { id: string; index: number; title: string | null; createdAt: string };
   checkRun: CheckRunSummary;
 };

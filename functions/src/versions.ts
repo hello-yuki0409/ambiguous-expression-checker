@@ -19,6 +19,7 @@ type CreateVersionPayload = {
   title?: string | null;
   content?: string | null;
   findings?: FindingPayload[] | null;
+  authorLabel?: string | null;
 };
 
 const CATEGORY_SET = new Set<string>(Object.values(AimaiCategory));
@@ -150,6 +151,7 @@ export const versions = onRequest(
             article: {
               id: article.id,
               title: article.title,
+              authorLabel: article.authorLabel,
               createdAt: article.createdAt,
               updatedAt: article.updatedAt,
               versions: article.versions.map(mapVersionSummary),
@@ -178,6 +180,7 @@ export const versions = onRequest(
           return {
             id: article.id,
             title: article.title,
+            authorLabel: article.authorLabel,
             createdAt: article.createdAt,
             updatedAt: article.updatedAt,
             latest: latest ? mapVersionSummary(latest) : null,
@@ -190,7 +193,7 @@ export const versions = onRequest(
       }
 
       if (req.method === "POST") {
-        const { articleId, title, content, findings } =
+        const { articleId, title, content, findings, authorLabel } =
           (req.body as CreateVersionPayload) ?? {};
 
         if (!content || !content.trim()) {
@@ -205,10 +208,14 @@ export const versions = onRequest(
           charLength > 0 ? (totalCount * 1000) / charLength : 0;
 
         const articleTitle = title?.trim() || null;
+        const rawAuthorLabel =
+          typeof authorLabel === "string" ? authorLabel.trim() : null;
+        const articleAuthorLabel = rawAuthorLabel || null;
 
         const result = await storageManager.saveVersion({
           articleId,
           title: articleTitle,
+          authorLabel: articleAuthorLabel,
           content,
           cleanFindings,
           charLength,
@@ -220,6 +227,7 @@ export const versions = onRequest(
           article: {
             id: result.articleRecord.id,
             title: result.articleRecord.title,
+            authorLabel: result.articleRecord.authorLabel,
           },
           version: {
             id: result.version.id,
