@@ -60,13 +60,20 @@ function sanitiseFindings(raw: FindingPayload[] | null | undefined) {
 }
 
 function extractVersionId(req: Request): string | null {
-  const path = (req.path ?? "").replace(/\/+$/, "");
+  const rawPaths = [req.originalUrl, req.url, req.path]
+    .map((value) => (typeof value === "string" ? value : ""))
+    .filter(Boolean);
+
   const prefixes = ["/api/versions/", "/versions/"];
-  for (const prefix of prefixes) {
-    if (path.startsWith(prefix)) {
-      const candidate = path.slice(prefix.length).split("/")[0];
-      if (candidate) {
-        return candidate;
+
+  for (const raw of rawPaths) {
+    const path = raw.split("?")[0]?.replace(/\/+$/, "") ?? "";
+    for (const prefix of prefixes) {
+      if (path.startsWith(prefix)) {
+        const candidate = path.slice(prefix.length).split("/")[0];
+        if (candidate) {
+          return candidate;
+        }
       }
     }
   }
@@ -269,6 +276,17 @@ export const versions = onRequest(
 
       if (req.method === "DELETE") {
         const versionId = extractVersionId(req);
+        if (process.env.NODE_ENV !== "production") {
+          console.log(
+            "[versions] delete request",
+            JSON.stringify({
+              originalUrl: req.originalUrl,
+              url: req.url,
+              path: req.path,
+              versionId,
+            })
+          );
+        }
         if (!versionId) {
           res.status(400).json({ error: "version_id_required" });
           return;

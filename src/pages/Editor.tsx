@@ -14,16 +14,7 @@ import {
 } from "@/lib/history";
 import { saveVersion } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDialog } from "@/components/molecules/dialogs/ConfirmDialog";
 
 const STORAGE_KEY = "aimai__lastContent";
 const TITLE_KEY = "aimai__articleTitle";
@@ -389,25 +380,18 @@ export default function Editor() {
                 履歴を削除
               </Button>
             </div>
-            <AlertDialog open={openDelete} onOpenChange={setOpenDelete}>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>直近の履歴をすべて削除しますか？</AlertDialogTitle>
-                  <AlertDialogDescription>⚠️この操作は取り消せません</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      clearHistory();
-                      setHistory([]);
-                    }}
-                  >
-                    削除する
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <ConfirmDialog
+              open={openDelete}
+              onOpenChange={setOpenDelete}
+              title="直近の履歴をすべて削除しますか？"
+              description="この操作は取り消せません"
+              confirmLabel="削除する"
+              onConfirm={() => {
+                clearHistory();
+                setHistory([]);
+                setOpenDelete(false);
+              }}
+            />
 
             {history.length === 0 ? (
               <p className="mt-3 text-xs text-muted-foreground">まだ履歴はありません</p>

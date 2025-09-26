@@ -152,9 +152,10 @@ export async function fetchVersionDetail(versionId: string) {
 }
 
 export async function deleteVersion(versionId: string) {
-  await request<unknown>(`/api/versions/${encodeURIComponent(versionId)}`, {
-    method: "DELETE",
-  });
+  await request<unknown>(
+    `/api/versions?versionId=${encodeURIComponent(versionId)}`,
+    { method: "DELETE" }
+  );
 }
 
 export type {
