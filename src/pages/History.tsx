@@ -11,6 +11,7 @@ import {
   type VersionDetail,
   type VersionSummary,
 } from "@/lib/api";
+import { VersionDeleteDialog } from "@/components/organisms/history/VersionDeleteDialog";
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -85,6 +86,7 @@ export default function History() {
   const [diffError, setDiffError] = useState<string | null>(null);
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<VersionSummary | null>(null);
 
   const selectedSummaries = useMemo(() => {
     if (!article) return [] as VersionSummary[];
@@ -203,13 +205,14 @@ export default function History() {
     setDiffError(null);
   };
 
-  const handleDelete = async (versionId: string) => {
-    const target = article?.versions.find((v) => v.id === versionId);
-    const versionLabel = target ? `v${target.index + 1}` : "選択中のバージョン";
-    const confirmed = window.confirm(
-      `${versionLabel} を削除します。\nこの操作は取り消せません。`
-    );
-    if (!confirmed) return;
+  const openDeleteDialog = (version: VersionSummary) => {
+    setDeleteError(null);
+    setDeleteTarget(version);
+  };
+
+  const performDelete = async () => {
+    if (!deleteTarget) return;
+    const versionId = deleteTarget.id;
 
     setDeleteError(null);
     setDeleteLoadingId(versionId);
@@ -234,6 +237,8 @@ export default function History() {
       });
 
       await loadSummaries();
+      setDeleteError(null);
+      setDeleteTarget(null);
     } catch (err) {
       setDeleteError((err as Error).message || "削除に失敗しました");
     } finally {
@@ -242,8 +247,9 @@ export default function History() {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
-      <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px,1fr]">
+    <>
+      <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
+        <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px,1fr]">
         <section className="rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-sm backdrop-blur">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-emerald-700">記事一覧</h2>
@@ -382,7 +388,7 @@ export default function History() {
                     <span className={chipClass(selectedVersions.length === 2)}>2 件</span>
                   </div>
                 </div>
-                {deleteError && (
+                {deleteError && !deleteTarget && (
                   <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
                     {deleteError}
                   </p>
@@ -441,7 +447,7 @@ export default function History() {
                                 variant="destructive"
                                 size="sm"
                                 className="bg-red-600 text-white hover:bg-red-700"
-                                onClick={() => handleDelete(version.id)}
+                                onClick={() => openDeleteDialog(version)}
                                 disabled={deleteLoadingId === version.id}
                               >
                                 {deleteLoadingId === version.id ? "削除中..." : "削除"}
@@ -535,5 +541,22 @@ export default function History() {
         </section>
       </div>
     </div>
+
+      <VersionDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+        target={deleteTarget}
+        onConfirm={performDelete}
+        loading={Boolean(
+          deleteTarget && deleteLoadingId === deleteTarget.id
+        )}
+        errorMessage={deleteError}
+      />
+    </>
   );
 }

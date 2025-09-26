@@ -225,7 +225,8 @@ class PrismaStorage {
                 if (!articleRecord) {
                     throw new Error("article_not_found");
                 }
-                const currentAuthorId = articleRecord.authorId ?? null;
+                const currentAuthorId = articleRecord
+                    .authorId ?? null;
                 if (currentAuthorId && currentAuthorId !== authorId) {
                     throw new Error("forbidden");
                 }
@@ -249,7 +250,8 @@ class PrismaStorage {
                 if (normalisedLabel !== currentLabel) {
                     updateData.authorLabel = normalisedLabel;
                 }
-                const currentAuthorId = articleRecord.authorId ?? null;
+                const currentAuthorId = articleRecord
+                    .authorId ?? null;
                 if (currentAuthorId !== authorId) {
                     updateData.author = { connect: { id: authorId } };
                 }
