@@ -13,6 +13,7 @@ import {
   type RunHistory,
 } from "@/lib/history";
 import { saveVersion } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +30,7 @@ const TITLE_KEY = "aimai__articleTitle";
 const ARTICLE_ID_KEY = "aimai__articleId";
 
 export default function Editor() {
+  const { user } = useAuth();
   const [content, setContent] = useState<string>(
     () => localStorage.getItem(STORAGE_KEY) ?? ""
   );
@@ -173,6 +175,11 @@ export default function Editor() {
       return;
     }
 
+    if (!user) {
+      setSaveError("ログイン情報が確認できませんでした");
+      return;
+    }
+
     setSaving(true);
     setSaveError(null);
     setSaveMessage(null);
@@ -187,6 +194,7 @@ export default function Editor() {
       const response = await saveVersion({
         articleId: articleId ?? undefined,
         title: title.trim() ? title.trim() : null,
+        authorLabel: user.displayName?.trim() || null,
         content,
         findings: result.map((f) => ({
           start: f.start,

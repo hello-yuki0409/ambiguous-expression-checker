@@ -1,4 +1,5 @@
 import type { Finding } from "@/lib/detection";
+import { auth } from "@/lib/firebase";
 
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
@@ -84,7 +85,19 @@ async function request<TResponse>(
   input: RequestInfo,
   init?: RequestInit
 ): Promise<TResponse> {
-  const res = await fetch(input, init);
+  const headers = new Headers(init?.headers ?? undefined);
+
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const currentUser = auth.currentUser;
+  if (currentUser) {
+    const token = await currentUser.getIdToken();
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const res = await fetch(input, { ...init, headers });
   let json: unknown;
   try {
     json = await res.json();
@@ -136,6 +149,12 @@ export async function fetchVersionDetail(versionId: string) {
     `/api/versions?versionId=${encodeURIComponent(versionId)}`
   );
   return data.version;
+}
+
+export async function deleteVersion(versionId: string) {
+  await request<unknown>(`/api/versions/${encodeURIComponent(versionId)}`, {
+    method: "DELETE",
+  });
 }
 
 export type {
