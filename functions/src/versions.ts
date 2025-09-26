@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { AimaiCategory } from "@prisma/client";
 import type { CleanFinding } from "./storage";
 import { storageManager } from "./storage";
+import { verifyFirebaseToken } from "./auth";
 
 type FindingPayload = {
   start: number;
@@ -58,6 +59,23 @@ function sanitiseFindings(raw: FindingPayload[] | null | undefined) {
     .filter((f): f is CleanFinding => f !== null);
 }
 
+function extractVersionId(req: Request): string | null {
+  const path = (req.path ?? "").replace(/\/+$/, "");
+  const prefixes = ["/api/versions/", "/versions/"];
+  for (const prefix of prefixes) {
+    if (path.startsWith(prefix)) {
+      const candidate = path.slice(prefix.length).split("/")[0];
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  const queryId =
+    typeof req.query.versionId === "string" ? req.query.versionId : null;
+  return queryId ?? null;
+}
+
 function mapCheckRun(run: {
   id: string;
   aimaiScore: number;
@@ -101,6 +119,14 @@ export const versions = onRequest(
   { cors: true, timeoutSeconds: 30 },
   async (req: Request, res: Response): Promise<void> => {
     try {
+      if (req.method === "OPTIONS") {
+        res.status(204).end();
+        return;
+      }
+
+      const decoded = await verifyFirebaseToken(req.headers.authorization);
+      const uid = decoded.uid;
+
       if (req.method === "GET") {
         const articleId =
           typeof req.query.articleId === "string"
@@ -112,7 +138,7 @@ export const versions = onRequest(
             : undefined;
 
         if (versionId) {
-          const version = await storageManager.getVersion(versionId);
+          const version = await storageManager.getVersion(versionId, uid);
 
           if (!version) {
             res.status(404).json({ error: "version_not_found" });
@@ -140,7 +166,7 @@ export const versions = onRequest(
         }
 
         if (articleId) {
-          const article = await storageManager.getArticle(articleId);
+          const article = await storageManager.getArticle(articleId, uid);
 
           if (!article) {
             res.status(404).json({ error: "article_not_found" });
@@ -173,7 +199,7 @@ export const versions = onRequest(
         const take = Math.min(100, Math.max(1, parsedTake ?? 20));
         const skip = Math.max(0, parsedSkip ?? 0);
 
-        const articles = await storageManager.listArticles(take, skip);
+        const articles = await storageManager.listArticles(take, skip, uid);
 
         const payload = articles.map((article) => {
           const [latest, previous] = article.versions;
@@ -216,6 +242,7 @@ export const versions = onRequest(
           articleId,
           title: articleTitle,
           authorLabel: articleAuthorLabel,
+          authorId: uid,
           content,
           cleanFindings,
           charLength,
@@ -240,8 +267,43 @@ export const versions = onRequest(
         return;
       }
 
+      if (req.method === "DELETE") {
+        const versionId = extractVersionId(req);
+        if (!versionId) {
+          res.status(400).json({ error: "version_id_required" });
+          return;
+        }
+
+        const deleted = await storageManager.deleteVersion(versionId, uid);
+        if (!deleted) {
+          res.status(404).json({ error: "version_not_found" });
+          return;
+        }
+
+        res.status(204).end();
+        return;
+      }
+
       res.status(405).end();
     } catch (error) {
+      const errorCode = (error as { code?: string | number | symbol }).code;
+      if (
+        error instanceof Error &&
+        (error.message === "unauthorized" || error.message === "forbidden")
+      ) {
+        const status = error.message === "forbidden" ? 403 : 401;
+        res.status(status).json({ error: error.message });
+        return;
+      }
+
+      if (
+        typeof errorCode === "string" &&
+        errorCode.startsWith("auth/")
+      ) {
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
+
       if (error instanceof Error && error.message === "article_not_found") {
         res.status(404).json({ error: "article_not_found" });
         return;

@@ -69,6 +69,7 @@ function mapVersion(raw, options) {
                 id: raw.article.id,
                 title: toNullableString(raw.article.title),
                 authorLabel: toNullableString(raw.article.authorLabel),
+                authorId: toNullableString(raw.article?.authorId),
             }
             : undefined,
         checkRuns: (raw.checkRuns ?? []).map((run) => mapCheckRun(run, contentLength, options.includeFindings)),
@@ -79,21 +80,24 @@ function mapArticle(raw, options) {
         id: raw.id,
         title: toNullableString(raw.title),
         authorLabel: toNullableString(raw.authorLabel),
+        authorId: toNullableString(raw.authorId),
         createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
         updatedAt: toDate(raw.updatedAt ?? raw.updated_at ?? null),
         versions: (raw.versions ?? []).map((version) => mapVersion(version, options)),
     };
 }
 class PrismaStorage {
-    async listArticles(take, skip) {
+    async listArticles(take, skip, authorId) {
         const rows = (await db_1.prisma.article.findMany({
             orderBy: { updatedAt: "desc" },
+            where: { authorId },
             skip,
             take,
             select: {
                 id: true,
                 title: true,
                 authorLabel: true,
+                authorId: true,
                 createdAt: true,
                 updatedAt: true,
                 versions: {
@@ -122,13 +126,14 @@ class PrismaStorage {
         }));
         return rows.map((row) => mapArticle(row, { includeContent: false, includeFindings: false }));
     }
-    async getArticle(articleId) {
-        const row = (await db_1.prisma.article.findUnique({
-            where: { id: articleId },
+    async getArticle(articleId, authorId) {
+        const row = (await db_1.prisma.article.findFirst({
+            where: { id: articleId, authorId },
             select: {
                 id: true,
                 title: true,
                 authorLabel: true,
+                authorId: true,
                 createdAt: true,
                 updatedAt: true,
                 versions: {
@@ -158,16 +163,18 @@ class PrismaStorage {
             return null;
         return mapArticle(row, { includeContent: false, includeFindings: false });
     }
-    async getVersion(versionId) {
-        const row = (await db_1.prisma.articleVersion.findUnique({
-            where: { id: versionId },
+    async getVersion(versionId, authorId) {
+        const row = (await db_1.prisma.articleVersion.findFirst({
+            where: { id: versionId, article: { authorId } },
             select: {
                 id: true,
                 index: true,
                 title: true,
                 content: true,
                 createdAt: true,
-                article: { select: { id: true, title: true, authorLabel: true } },
+                article: {
+                    select: { id: true, title: true, authorLabel: true, authorId: true },
+                },
                 checkRuns: {
                     orderBy: { createdAt: "desc" },
                     take: 1,
@@ -199,20 +206,37 @@ class PrismaStorage {
         return mapVersion(row, { includeContent: true, includeFindings: true });
     }
     async saveVersion(payload) {
-        const { articleId, title, authorLabel, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
+        const { articleId, title, authorLabel, authorId, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
+        if (!authorId) {
+            throw new Error("unauthorized");
+        }
         const result = await db_1.prisma.$transaction(async (tx) => {
-            let articleRecord = articleId
-                ? (await tx.article.findUnique({
-                    where: { id: articleId },
-                }))
-                : null;
-            if (articleId && !articleRecord) {
-                throw new Error("article_not_found");
-            }
             const normalisedLabel = authorLabel ?? null;
+            await tx.user.upsert({
+                where: { id: authorId },
+                update: { authorLabel: normalisedLabel },
+                create: { id: authorId, authorLabel: normalisedLabel },
+            });
+            let articleRecord = null;
+            if (articleId) {
+                articleRecord = (await tx.article.findUnique({
+                    where: { id: articleId },
+                }));
+                if (!articleRecord) {
+                    throw new Error("article_not_found");
+                }
+                const currentAuthorId = articleRecord.authorId ?? null;
+                if (currentAuthorId && currentAuthorId !== authorId) {
+                    throw new Error("forbidden");
+                }
+            }
             if (!articleRecord) {
                 articleRecord = (await tx.article.create({
-                    data: { title, authorLabel: normalisedLabel },
+                    data: {
+                        title,
+                        authorLabel: normalisedLabel,
+                        author: { connect: { id: authorId } },
+                    },
                 }));
             }
             else {
@@ -224,6 +248,10 @@ class PrismaStorage {
                     .authorLabel ?? null;
                 if (normalisedLabel !== currentLabel) {
                     updateData.authorLabel = normalisedLabel;
+                }
+                const currentAuthorId = articleRecord.authorId ?? null;
+                if (currentAuthorId !== authorId) {
+                    updateData.author = { connect: { id: authorId } };
                 }
                 if (Object.keys(updateData).length > 0) {
                     articleRecord = (await tx.article.update({
@@ -273,6 +301,8 @@ class PrismaStorage {
                 title: toNullableString(result.articleRecord.title),
                 authorLabel: toNullableString(result.articleRecord
                     .authorLabel ?? null),
+                authorId: toNullableString(result.articleRecord
+                    .authorId ?? null),
                 createdAt: toDate(result.articleRecord.createdAt ??
                     result.articleRecord.created_at ??
                     null),
@@ -300,12 +330,46 @@ class PrismaStorage {
             },
         };
     }
+    async deleteVersion(versionId, authorId) {
+        return db_1.prisma.$transaction(async (tx) => {
+            const version = (await tx.articleVersion.findFirst({
+                where: { id: versionId, article: { authorId } },
+                select: {
+                    id: true,
+                    articleId: true,
+                    checkRuns: { select: { id: true } },
+                },
+            }));
+            if (!version) {
+                return false;
+            }
+            const checkRunIds = (version.checkRuns ?? []).map((run) => run.id);
+            if (checkRunIds.length > 0) {
+                await tx.finding.deleteMany({
+                    where: { runId: { in: checkRunIds } },
+                });
+                await tx.checkRun.deleteMany({
+                    where: { id: { in: checkRunIds } },
+                });
+            }
+            await tx.articleVersion.delete({
+                where: { id: versionId },
+            });
+            if (version.articleId) {
+                await tx.article.update({
+                    where: { id: version.articleId },
+                    data: { updatedAt: new Date() },
+                });
+            }
+            return true;
+        });
+    }
 }
 class MemoryStorage {
     constructor() {
         this.articles = new Map();
     }
-    ensureArticle(articleId, title, authorLabel) {
+    ensureArticle(articleId, title, authorLabel, authorId) {
         if (articleId) {
             const existing = this.articles.get(articleId);
             if (existing) {
@@ -314,6 +378,9 @@ class MemoryStorage {
                 }
                 if (authorLabel !== undefined && existing.authorLabel !== authorLabel) {
                     existing.authorLabel = authorLabel ?? null;
+                }
+                if (authorId !== undefined && existing.authorId !== authorId) {
+                    existing.authorId = authorId ?? null;
                 }
                 return existing;
             }
@@ -324,6 +391,7 @@ class MemoryStorage {
             id,
             title: title ?? null,
             authorLabel: authorLabel ?? null,
+            authorId: authorId ?? null,
             createdAt: now,
             updatedAt: now,
             versions: [],
@@ -331,13 +399,16 @@ class MemoryStorage {
         this.articles.set(id, article);
         return article;
     }
-    async listArticles(take, skip) {
-        const rows = [...this.articles.values()].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    async listArticles(take, skip, authorId) {
+        const rows = [...this.articles.values()]
+            .filter((article) => article.authorId === authorId)
+            .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
         const sliced = rows.slice(skip, skip + take);
         return sliced.map((article) => ({
             id: article.id,
             title: article.title,
             authorLabel: article.authorLabel,
+            authorId: article.authorId,
             createdAt: article.createdAt,
             updatedAt: article.updatedAt,
             versions: article.versions
@@ -360,14 +431,15 @@ class MemoryStorage {
             })),
         }));
     }
-    async getArticle(articleId) {
+    async getArticle(articleId, authorId) {
         const article = this.articles.get(articleId);
-        if (!article)
+        if (!article || article.authorId !== authorId)
             return null;
         return {
             id: article.id,
             title: article.title,
             authorLabel: article.authorLabel,
+            authorId: article.authorId,
             createdAt: article.createdAt,
             updatedAt: article.updatedAt,
             versions: article.versions
@@ -389,8 +461,10 @@ class MemoryStorage {
             })),
         };
     }
-    async getVersion(versionId) {
+    async getVersion(versionId, authorId) {
         for (const article of this.articles.values()) {
+            if (article.authorId !== authorId)
+                continue;
             const version = article.versions.find((v) => v.id === versionId);
             if (version) {
                 const latest = version.checkRuns[version.checkRuns.length - 1];
@@ -404,6 +478,7 @@ class MemoryStorage {
                         id: article.id,
                         title: article.title,
                         authorLabel: article.authorLabel,
+                        authorId: article.authorId,
                     },
                     checkRuns: latest
                         ? [
@@ -420,7 +495,7 @@ class MemoryStorage {
     }
     async saveVersion(payload) {
         const { articleId, title, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;
-        const article = this.ensureArticle(articleId ?? null, title, payload.authorLabel);
+        const article = this.ensureArticle(articleId ?? null, title, payload.authorLabel, payload.authorId);
         const versionIndex = article.versions.length;
         const versionId = (0, crypto_1.randomUUID)();
         const createdAt = new Date();
@@ -450,6 +525,7 @@ class MemoryStorage {
             createdAt,
             checkRuns: [checkRun],
         };
+        article.authorId = payload.authorId;
         article.versions.push(version);
         article.updatedAt = createdAt;
         if (title && article.title !== title) {
@@ -460,6 +536,7 @@ class MemoryStorage {
                 id: article.id,
                 title: article.title,
                 authorLabel: article.authorLabel,
+                authorId: article.authorId,
                 createdAt: article.createdAt,
                 updatedAt: article.updatedAt,
             },
@@ -491,6 +568,7 @@ class MemoryStorage {
                 id: snapshot.article.id,
                 title: snapshot.article.title,
                 authorLabel: snapshot.article.authorLabel,
+                authorId: snapshot.article.authorId ?? snapshot.authorId ?? null,
             },
             checkRuns: [
                 {
@@ -517,6 +595,7 @@ class MemoryStorage {
                 id: snapshot.article.id,
                 title: snapshot.article.title,
                 authorLabel: snapshot.article.authorLabel,
+                authorId: snapshot.article.authorId ?? snapshot.authorId ?? null,
                 createdAt: snapshot.article.createdAt,
                 updatedAt: snapshot.article.updatedAt,
                 versions: [storedVersion],
@@ -526,11 +605,12 @@ class MemoryStorage {
     }
     hydrateArticles(articles) {
         articles.forEach((articleData) => {
-            const target = this.ensureArticle(articleData.id, articleData.title ?? null, articleData.authorLabel ?? null);
+            const target = this.ensureArticle(articleData.id, articleData.title ?? null, articleData.authorLabel ?? null, articleData.authorId ?? null);
             target.title = articleData.title ?? null;
-            target.authorLabel = articleData.authorLabel ?? null;
             target.createdAt = articleData.createdAt;
             target.updatedAt = articleData.updatedAt;
+            target.authorLabel = articleData.authorLabel ?? null;
+            target.authorId = articleData.authorId ?? null;
             const versions = (articleData.versions ?? [])
                 .slice()
                 .sort((a, b) => a.index - b.index)
@@ -544,8 +624,10 @@ class MemoryStorage {
         const articleInfo = version.article;
         if (!articleInfo)
             return;
-        const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null, articleInfo.authorLabel ?? null);
+        const target = this.ensureArticle(articleInfo.id, articleInfo.title ?? null, articleInfo.authorLabel ?? null, articleInfo.authorId ?? null);
         target.updatedAt = version.createdAt;
+        target.authorLabel = articleInfo.authorLabel ?? null;
+        target.authorId = articleInfo.authorId ?? null;
         const memoryVersion = this.toMemoryVersion(version, true);
         const index = target.versions.findIndex((v) => v.id === memoryVersion.id);
         if (index >= 0) {
@@ -585,6 +667,21 @@ class MemoryStorage {
             checkRuns: runs,
         };
     }
+    async deleteVersion(versionId, authorId) {
+        for (const article of this.articles.values()) {
+            if (article.authorId !== authorId)
+                continue;
+            const index = article.versions.findIndex((version) => version.id === versionId);
+            if (index === -1)
+                continue;
+            const [removed] = article.versions.splice(index, 1);
+            if (removed) {
+                article.updatedAt = new Date();
+            }
+            return true;
+        }
+        return false;
+    }
 }
 function isPrismaInitializationError(error) {
     if (!error)
@@ -622,33 +719,33 @@ class StorageManager {
             throw error;
         }
     }
-    async listArticles(take, skip) {
-        const dbResult = await this.tryPrisma(() => this.prismaAdapter.listArticles(take, skip));
+    async listArticles(take, skip, authorId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.listArticles(take, skip, authorId));
         if (dbResult && (!this.preferMemory || dbResult.length > 0)) {
             this.memoryAdapter.hydrateArticles(dbResult);
             return dbResult;
         }
-        const memoryResult = await this.memoryAdapter.listArticles(take, skip);
+        const memoryResult = await this.memoryAdapter.listArticles(take, skip, authorId);
         if (memoryResult.length > 0) {
             return memoryResult;
         }
         return dbResult ?? memoryResult;
     }
-    async getArticle(articleId) {
-        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getArticle(articleId));
+    async getArticle(articleId, authorId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getArticle(articleId, authorId));
         if (dbResult) {
             this.memoryAdapter.hydrateArticles([dbResult]);
             return dbResult;
         }
-        return this.memoryAdapter.getArticle(articleId);
+        return this.memoryAdapter.getArticle(articleId, authorId);
     }
-    async getVersion(versionId) {
-        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getVersion(versionId));
+    async getVersion(versionId, authorId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.getVersion(versionId, authorId));
         if (dbResult) {
             this.memoryAdapter.hydrateVersionDetails(dbResult);
             return dbResult;
         }
-        return this.memoryAdapter.getVersion(versionId);
+        return this.memoryAdapter.getVersion(versionId, authorId);
     }
     async saveVersion(payload) {
         const dbResult = await this.tryPrisma(() => this.prismaAdapter.saveVersion(payload));
@@ -659,10 +756,19 @@ class StorageManager {
                 checkRun: dbResult.checkRun,
                 content: payload.content,
                 findings: payload.cleanFindings,
+                authorId: payload.authorId,
             });
             return dbResult;
         }
         return this.memoryAdapter.saveVersion(payload);
+    }
+    async deleteVersion(versionId, authorId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.deleteVersion(versionId, authorId));
+        if (dbResult) {
+            await this.memoryAdapter.deleteVersion(versionId, authorId);
+            return dbResult;
+        }
+        return this.memoryAdapter.deleteVersion(versionId, authorId);
     }
 }
 exports.StorageManager = StorageManager;

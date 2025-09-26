@@ -4,6 +4,7 @@ exports.versions = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const client_1 = require("@prisma/client");
 const storage_1 = require("./storage");
+const auth_1 = require("./auth");
 const CATEGORY_SET = new Set(Object.values(client_1.AimaiCategory));
 const clampScore = (value) => Math.round(value * 100) / 100;
 function toCharLength(text) {
@@ -36,6 +37,20 @@ function sanitiseFindings(raw) {
     })
         .filter((f) => f !== null);
 }
+function extractVersionId(req) {
+    const path = (req.path ?? "").replace(/\/+$/, "");
+    const prefixes = ["/api/versions/", "/versions/"];
+    for (const prefix of prefixes) {
+        if (path.startsWith(prefix)) {
+            const candidate = path.slice(prefix.length).split("/")[0];
+            if (candidate) {
+                return candidate;
+            }
+        }
+    }
+    const queryId = typeof req.query.versionId === "string" ? req.query.versionId : null;
+    return queryId ?? null;
+}
 function mapCheckRun(run) {
     return {
         id: run.id,
@@ -57,6 +72,12 @@ function mapVersionSummary(version) {
 }
 exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
+        if (req.method === "OPTIONS") {
+            res.status(204).end();
+            return;
+        }
+        const decoded = await (0, auth_1.verifyFirebaseToken)(req.headers.authorization);
+        const uid = decoded.uid;
         if (req.method === "GET") {
             const articleId = typeof req.query.articleId === "string"
                 ? req.query.articleId
@@ -65,7 +86,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 ? req.query.versionId
                 : undefined;
             if (versionId) {
-                const version = await storage_1.storageManager.getVersion(versionId);
+                const version = await storage_1.storageManager.getVersion(versionId, uid);
                 if (!version) {
                     res.status(404).json({ error: "version_not_found" });
                     return;
@@ -90,7 +111,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 return;
             }
             if (articleId) {
-                const article = await storage_1.storageManager.getArticle(articleId);
+                const article = await storage_1.storageManager.getArticle(articleId, uid);
                 if (!article) {
                     res.status(404).json({ error: "article_not_found" });
                     return;
@@ -118,7 +139,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
             const parsedSkip = toNumberParam(req.query.skip);
             const take = Math.min(100, Math.max(1, parsedTake ?? 20));
             const skip = Math.max(0, parsedSkip ?? 0);
-            const articles = await storage_1.storageManager.listArticles(take, skip);
+            const articles = await storage_1.storageManager.listArticles(take, skip, uid);
             const payload = articles.map((article) => {
                 const [latest, previous] = article.versions;
                 return {
@@ -151,6 +172,7 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
                 articleId,
                 title: articleTitle,
                 authorLabel: articleAuthorLabel,
+                authorId: uid,
                 content,
                 cleanFindings,
                 charLength,
@@ -173,9 +195,35 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
             });
             return;
         }
+        if (req.method === "DELETE") {
+            const versionId = extractVersionId(req);
+            if (!versionId) {
+                res.status(400).json({ error: "version_id_required" });
+                return;
+            }
+            const deleted = await storage_1.storageManager.deleteVersion(versionId, uid);
+            if (!deleted) {
+                res.status(404).json({ error: "version_not_found" });
+                return;
+            }
+            res.status(204).end();
+            return;
+        }
         res.status(405).end();
     }
     catch (error) {
+        const errorCode = error.code;
+        if (error instanceof Error &&
+            (error.message === "unauthorized" || error.message === "forbidden")) {
+            const status = error.message === "forbidden" ? 403 : 401;
+            res.status(status).json({ error: error.message });
+            return;
+        }
+        if (typeof errorCode === "string" &&
+            errorCode.startsWith("auth/")) {
+            res.status(401).json({ error: "unauthorized" });
+            return;
+        }
         if (error instanceof Error && error.message === "article_not_found") {
             res.status(404).json({ error: "article_not_found" });
             return;

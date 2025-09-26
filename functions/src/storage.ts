@@ -38,7 +38,12 @@ export type StoredVersion = {
   title: string | null;
   content?: string;
   createdAt: Date;
-  article?: { id: string; title: string | null; authorLabel: string | null };
+  article?: {
+    id: string;
+    title: string | null;
+    authorLabel: string | null;
+    authorId: string | null;
+  };
   checkRuns: StoredCheckRun[];
 };
 
@@ -46,6 +51,7 @@ export type StoredArticle = {
   id: string;
   title: string | null;
   authorLabel: string | null;
+  authorId: string | null;
   createdAt: Date;
   updatedAt: Date;
   versions: StoredVersion[];
@@ -55,6 +61,7 @@ export type SaveVersionInput = {
   articleId?: string | null;
   title: string | null;
   authorLabel: string | null;
+  authorId: string;
   content: string;
   cleanFindings: CleanFinding[];
   charLength: number;
@@ -67,6 +74,7 @@ export type SaveVersionResult = {
     id: string;
     title: string | null;
     authorLabel: string | null;
+    authorId: string | null;
     createdAt: Date;
     updatedAt: Date;
   };
@@ -112,7 +120,12 @@ type RawCheckRun = {
 };
 
 type RawArticleRef =
-  | { id: string; title?: string | null; authorLabel?: string | null }
+  | {
+      id: string;
+      title?: string | null;
+      authorLabel?: string | null;
+      authorId?: string | null;
+    }
   | null
   | undefined;
 
@@ -133,6 +146,7 @@ type RawArticle = {
   id: string;
   title?: string | null;
   authorLabel?: string | null;
+  authorId?: string | null;
   createdAt?: Date | string | number | null;
   created_at?: Date | string | number | null;
   updatedAt?: Date | string | number | null;
@@ -216,6 +230,7 @@ function mapVersion(
           id: raw.article.id,
           title: toNullableString(raw.article.title),
           authorLabel: toNullableString(raw.article.authorLabel),
+          authorId: toNullableString((raw.article as { authorId?: string | null })?.authorId),
         }
       : undefined,
     checkRuns: (raw.checkRuns ?? []).map((run) =>
@@ -232,6 +247,7 @@ function mapArticle(
     id: raw.id,
     title: toNullableString(raw.title),
     authorLabel: toNullableString(raw.authorLabel),
+    authorId: toNullableString((raw as { authorId?: string | null }).authorId),
     createdAt: toDate(raw.createdAt ?? raw.created_at ?? null),
     updatedAt: toDate(raw.updatedAt ?? raw.updated_at ?? null),
     versions: (raw.versions ?? []).map((version) =>
@@ -241,22 +257,39 @@ function mapArticle(
 }
 
 interface StorageAdapter {
-  listArticles(take: number, skip: number): Promise<StoredArticle[]>;
-  getArticle(articleId: string): Promise<StoredArticle | null>;
-  getVersion(versionId: string): Promise<StoredVersion | null>;
+  listArticles(
+    take: number,
+    skip: number,
+    authorId: string
+  ): Promise<StoredArticle[]>;
+  getArticle(
+    articleId: string,
+    authorId: string
+  ): Promise<StoredArticle | null>;
+  getVersion(
+    versionId: string,
+    authorId: string
+  ): Promise<StoredVersion | null>;
   saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult>;
+  deleteVersion(versionId: string, authorId: string): Promise<boolean>;
 }
 
 class PrismaStorage implements StorageAdapter {
-  async listArticles(take: number, skip: number): Promise<StoredArticle[]> {
+  async listArticles(
+    take: number,
+    skip: number,
+    authorId: string
+  ): Promise<StoredArticle[]> {
     const rows = (await prisma.article.findMany({
       orderBy: { updatedAt: "desc" },
+      where: { authorId },
       skip,
       take,
       select: {
         id: true,
         title: true,
         authorLabel: true,
+        authorId: true,
         createdAt: true,
         updatedAt: true,
         versions: {
@@ -289,13 +322,17 @@ class PrismaStorage implements StorageAdapter {
     );
   }
 
-  async getArticle(articleId: string): Promise<StoredArticle | null> {
-    const row = (await prisma.article.findUnique({
-      where: { id: articleId },
+  async getArticle(
+    articleId: string,
+    authorId: string
+  ): Promise<StoredArticle | null> {
+    const row = (await prisma.article.findFirst({
+      where: { id: articleId, authorId },
       select: {
         id: true,
         title: true,
         authorLabel: true,
+        authorId: true,
         createdAt: true,
         updatedAt: true,
         versions: {
@@ -320,22 +357,27 @@ class PrismaStorage implements StorageAdapter {
           },
         },
       },
-    } as unknown as Parameters<typeof prisma.article.findUnique>[0])) as RawArticle | null;
+    } as unknown as Parameters<typeof prisma.article.findFirst>[0])) as RawArticle | null;
 
     if (!row) return null;
     return mapArticle(row, { includeContent: false, includeFindings: false });
   }
 
-  async getVersion(versionId: string): Promise<StoredVersion | null> {
-    const row = (await prisma.articleVersion.findUnique({
-      where: { id: versionId },
+  async getVersion(
+    versionId: string,
+    authorId: string
+  ): Promise<StoredVersion | null> {
+    const row = (await prisma.articleVersion.findFirst({
+      where: { id: versionId, article: { authorId } },
       select: {
         id: true,
         index: true,
         title: true,
         content: true,
         createdAt: true,
-        article: { select: { id: true, title: true, authorLabel: true } },
+        article: {
+          select: { id: true, title: true, authorLabel: true, authorId: true },
+        },
         checkRuns: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -361,7 +403,7 @@ class PrismaStorage implements StorageAdapter {
           },
         },
       },
-    } as unknown as Parameters<typeof prisma.articleVersion.findUnique>[0])) as RawVersion | null;
+    } as unknown as Parameters<typeof prisma.articleVersion.findFirst>[0])) as RawVersion | null;
 
     if (!row) return null;
     return mapVersion(row, { includeContent: true, includeFindings: true });
@@ -372,6 +414,7 @@ class PrismaStorage implements StorageAdapter {
       articleId,
       title,
       authorLabel,
+      authorId,
       content,
       cleanFindings,
       charLength,
@@ -379,23 +422,45 @@ class PrismaStorage implements StorageAdapter {
       aimaiScore,
     } = payload;
 
+    if (!authorId) {
+      throw new Error("unauthorized");
+    }
+
     const result = await prisma.$transaction(
       async (tx: Prisma.TransactionClient) => {
-        let articleRecord = articleId
-          ? ((await tx.article.findUnique({
-              where: { id: articleId },
-            } as unknown as Parameters<typeof tx.article.findUnique>[0])) as RawArticle | null)
-          : null;
-
-        if (articleId && !articleRecord) {
-          throw new Error("article_not_found");
-        }
-
         const normalisedLabel = authorLabel ?? null;
+
+        await tx.user.upsert({
+          where: { id: authorId },
+          update: { authorLabel: normalisedLabel },
+          create: { id: authorId, authorLabel: normalisedLabel },
+        } as unknown as Parameters<typeof tx.user.upsert>[0]);
+
+        let articleRecord: RawArticle | null = null;
+
+        if (articleId) {
+          articleRecord = (await tx.article.findUnique({
+            where: { id: articleId },
+          } as unknown as Parameters<typeof tx.article.findUnique>[0])) as RawArticle | null;
+
+          if (!articleRecord) {
+            throw new Error("article_not_found");
+          }
+
+          const currentAuthorId =
+            (articleRecord as unknown as { authorId?: string | null }).authorId ?? null;
+          if (currentAuthorId && currentAuthorId !== authorId) {
+            throw new Error("forbidden");
+          }
+        }
 
         if (!articleRecord) {
           articleRecord = (await tx.article.create({
-            data: { title, authorLabel: normalisedLabel },
+            data: {
+              title,
+              authorLabel: normalisedLabel,
+              author: { connect: { id: authorId } },
+            },
           } as unknown as Parameters<typeof tx.article.create>[0])) as RawArticle;
         } else {
           const updateData: Prisma.ArticleUpdateInput = {};
@@ -409,6 +474,12 @@ class PrismaStorage implements StorageAdapter {
               .authorLabel ?? null;
           if (normalisedLabel !== currentLabel) {
             updateData.authorLabel = normalisedLabel;
+          }
+
+          const currentAuthorId =
+            (articleRecord as unknown as { authorId?: string | null }).authorId ?? null;
+          if (currentAuthorId !== authorId) {
+            updateData.author = { connect: { id: authorId } };
           }
 
           if (Object.keys(updateData).length > 0) {
@@ -468,6 +539,10 @@ class PrismaStorage implements StorageAdapter {
           (result.articleRecord as unknown as { authorLabel?: string | null })
             .authorLabel ?? null
         ),
+        authorId: toNullableString(
+          (result.articleRecord as unknown as { authorId?: string | null })
+            .authorId ?? null
+        ),
         createdAt: toDate(
           result.articleRecord.createdAt ??
             result.articleRecord.created_at ??
@@ -505,6 +580,52 @@ class PrismaStorage implements StorageAdapter {
     };
   }
 
+  async deleteVersion(versionId: string, authorId: string): Promise<boolean> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const version = (await tx.articleVersion.findFirst({
+        where: { id: versionId, article: { authorId } },
+        select: {
+          id: true,
+          articleId: true,
+          checkRuns: { select: { id: true } },
+        },
+      } as unknown as Parameters<typeof tx.articleVersion.findFirst>[0])) as
+        | (
+            RawVersion & {
+              articleId?: string | null;
+              checkRuns?: { id: string }[];
+            }
+          )
+        | null;
+
+      if (!version) {
+        return false;
+      }
+
+      const checkRunIds = (version.checkRuns ?? []).map((run) => run.id);
+      if (checkRunIds.length > 0) {
+        await tx.finding.deleteMany({
+          where: { runId: { in: checkRunIds } },
+        } as unknown as Parameters<typeof tx.finding.deleteMany>[0]);
+        await tx.checkRun.deleteMany({
+          where: { id: { in: checkRunIds } },
+        } as unknown as Parameters<typeof tx.checkRun.deleteMany>[0]);
+      }
+
+      await tx.articleVersion.delete({
+        where: { id: versionId },
+      } as unknown as Parameters<typeof tx.articleVersion.delete>[0]);
+
+      if (version.articleId) {
+        await tx.article.update({
+          where: { id: version.articleId },
+          data: { updatedAt: new Date() },
+        } as unknown as Parameters<typeof tx.article.update>[0]);
+      }
+
+      return true;
+    });
+  }
 }
 
 // ---------------------------
@@ -526,6 +647,7 @@ type MemoryArticle = {
   id: string;
   title: string | null;
   authorLabel: string | null;
+  authorId: string | null;
   createdAt: Date;
   updatedAt: Date;
   versions: MemoryVersion[];
@@ -537,6 +659,7 @@ type SnapshotInput = {
   checkRun: SaveVersionResult["checkRun"];
   content: string;
   findings: CleanFinding[];
+  authorId: string;
 };
 
 class MemoryStorage implements StorageAdapter {
@@ -545,7 +668,8 @@ class MemoryStorage implements StorageAdapter {
   private ensureArticle(
     articleId: string | null | undefined,
     title: string | null,
-    authorLabel?: string | null
+    authorLabel?: string | null,
+    authorId?: string | null
   ) {
     if (articleId) {
       const existing = this.articles.get(articleId);
@@ -555,6 +679,9 @@ class MemoryStorage implements StorageAdapter {
         }
         if (authorLabel !== undefined && existing.authorLabel !== authorLabel) {
           existing.authorLabel = authorLabel ?? null;
+        }
+        if (authorId !== undefined && existing.authorId !== authorId) {
+          existing.authorId = authorId ?? null;
         }
         return existing;
       }
@@ -566,6 +693,7 @@ class MemoryStorage implements StorageAdapter {
       id,
       title: title ?? null,
       authorLabel: authorLabel ?? null,
+      authorId: authorId ?? null,
       createdAt: now,
       updatedAt: now,
       versions: [],
@@ -574,8 +702,14 @@ class MemoryStorage implements StorageAdapter {
     return article;
   }
 
-  async listArticles(take: number, skip: number): Promise<StoredArticle[]> {
-    const rows = [...this.articles.values()].sort(
+  async listArticles(
+    take: number,
+    skip: number,
+    authorId: string
+  ): Promise<StoredArticle[]> {
+    const rows = [...this.articles.values()]
+      .filter((article) => article.authorId === authorId)
+      .sort(
       (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
     );
     const sliced = rows.slice(skip, skip + take);
@@ -583,6 +717,7 @@ class MemoryStorage implements StorageAdapter {
       id: article.id,
       title: article.title,
       authorLabel: article.authorLabel,
+      authorId: article.authorId,
       createdAt: article.createdAt,
       updatedAt: article.updatedAt,
       versions: article.versions
@@ -606,13 +741,17 @@ class MemoryStorage implements StorageAdapter {
     }));
   }
 
-  async getArticle(articleId: string): Promise<StoredArticle | null> {
+  async getArticle(
+    articleId: string,
+    authorId: string
+  ): Promise<StoredArticle | null> {
     const article = this.articles.get(articleId);
-    if (!article) return null;
+    if (!article || article.authorId !== authorId) return null;
     return {
       id: article.id,
       title: article.title,
       authorLabel: article.authorLabel,
+      authorId: article.authorId,
       createdAt: article.createdAt,
       updatedAt: article.updatedAt,
       versions: article.versions
@@ -635,8 +774,12 @@ class MemoryStorage implements StorageAdapter {
     };
   }
 
-  async getVersion(versionId: string): Promise<StoredVersion | null> {
+  async getVersion(
+    versionId: string,
+    authorId: string
+  ): Promise<StoredVersion | null> {
     for (const article of this.articles.values()) {
+      if (article.authorId !== authorId) continue;
       const version = article.versions.find((v) => v.id === versionId);
       if (version) {
         const latest = version.checkRuns[version.checkRuns.length - 1];
@@ -650,6 +793,7 @@ class MemoryStorage implements StorageAdapter {
             id: article.id,
             title: article.title,
             authorLabel: article.authorLabel,
+            authorId: article.authorId,
           },
           checkRuns: latest
             ? [
@@ -679,7 +823,8 @@ class MemoryStorage implements StorageAdapter {
     const article = this.ensureArticle(
       articleId ?? null,
       title,
-      payload.authorLabel
+      payload.authorLabel,
+      payload.authorId
     );
     const versionIndex = article.versions.length;
     const versionId = randomUUID();
@@ -714,6 +859,7 @@ class MemoryStorage implements StorageAdapter {
       checkRuns: [checkRun],
     };
 
+    article.authorId = payload.authorId;
     article.versions.push(version);
     article.updatedAt = createdAt;
     if (title && article.title !== title) {
@@ -725,6 +871,7 @@ class MemoryStorage implements StorageAdapter {
         id: article.id,
         title: article.title,
         authorLabel: article.authorLabel,
+        authorId: article.authorId,
         createdAt: article.createdAt,
         updatedAt: article.updatedAt,
       },
@@ -757,6 +904,7 @@ class MemoryStorage implements StorageAdapter {
         id: snapshot.article.id,
         title: snapshot.article.title,
         authorLabel: snapshot.article.authorLabel,
+        authorId: snapshot.article.authorId ?? snapshot.authorId ?? null,
       },
       checkRuns: [
         {
@@ -784,6 +932,7 @@ class MemoryStorage implements StorageAdapter {
         id: snapshot.article.id,
         title: snapshot.article.title,
         authorLabel: snapshot.article.authorLabel,
+        authorId: snapshot.article.authorId ?? snapshot.authorId ?? null,
         createdAt: snapshot.article.createdAt,
         updatedAt: snapshot.article.updatedAt,
         versions: [storedVersion],
@@ -798,12 +947,14 @@ class MemoryStorage implements StorageAdapter {
       const target = this.ensureArticle(
         articleData.id,
         articleData.title ?? null,
-        articleData.authorLabel ?? null
+        articleData.authorLabel ?? null,
+        articleData.authorId ?? null
       );
       target.title = articleData.title ?? null;
-      target.authorLabel = articleData.authorLabel ?? null;
       target.createdAt = articleData.createdAt;
       target.updatedAt = articleData.updatedAt;
+      target.authorLabel = articleData.authorLabel ?? null;
+      target.authorId = articleData.authorId ?? null;
 
       const versions = (articleData.versions ?? [])
         .slice()
@@ -822,9 +973,12 @@ class MemoryStorage implements StorageAdapter {
     const target = this.ensureArticle(
       articleInfo.id,
       articleInfo.title ?? null,
-      articleInfo.authorLabel ?? null
+      articleInfo.authorLabel ?? null,
+      articleInfo.authorId ?? null
     );
     target.updatedAt = version.createdAt;
+    target.authorLabel = articleInfo.authorLabel ?? null;
+    target.authorId = articleInfo.authorId ?? null;
 
     const memoryVersion = this.toMemoryVersion(version, true);
     const index = target.versions.findIndex((v) => v.id === memoryVersion.id);
@@ -836,7 +990,10 @@ class MemoryStorage implements StorageAdapter {
     target.versions.sort((a, b) => a.index - b.index);
   }
 
-  private toMemoryVersion(version: StoredVersion, includeFindings: boolean): MemoryVersion {
+  private toMemoryVersion(
+    version: StoredVersion,
+    includeFindings: boolean
+  ): MemoryVersion {
     const runs = (version.checkRuns ?? []).map((run) => ({
       id: run.id,
       aimaiScore: run.aimaiScore,
@@ -865,6 +1022,21 @@ class MemoryStorage implements StorageAdapter {
       createdAt: version.createdAt,
       checkRuns: runs,
     };
+  }
+
+  async deleteVersion(versionId: string, authorId: string): Promise<boolean> {
+    for (const article of this.articles.values()) {
+      if (article.authorId !== authorId) continue;
+      const index = article.versions.findIndex((version) => version.id === versionId);
+      if (index === -1) continue;
+
+      const [removed] = article.versions.splice(index, 1);
+      if (removed) {
+        article.updatedAt = new Date();
+      }
+      return true;
+    }
+    return false;
   }
 }
 
@@ -908,16 +1080,20 @@ export class StorageManager {
     }
   }
 
-  async listArticles(take: number, skip: number) {
+  async listArticles(take: number, skip: number, authorId: string) {
     const dbResult = await this.tryPrisma(() =>
-      this.prismaAdapter.listArticles(take, skip)
+      this.prismaAdapter.listArticles(take, skip, authorId)
     );
     if (dbResult && (!this.preferMemory || dbResult.length > 0)) {
       this.memoryAdapter.hydrateArticles(dbResult);
       return dbResult;
     }
 
-    const memoryResult = await this.memoryAdapter.listArticles(take, skip);
+    const memoryResult = await this.memoryAdapter.listArticles(
+      take,
+      skip,
+      authorId
+    );
     if (memoryResult.length > 0) {
       return memoryResult;
     }
@@ -925,26 +1101,26 @@ export class StorageManager {
     return dbResult ?? memoryResult;
   }
 
-  async getArticle(articleId: string) {
+  async getArticle(articleId: string, authorId: string) {
     const dbResult = await this.tryPrisma(() =>
-      this.prismaAdapter.getArticle(articleId)
+      this.prismaAdapter.getArticle(articleId, authorId)
     );
     if (dbResult) {
       this.memoryAdapter.hydrateArticles([dbResult]);
       return dbResult;
     }
-    return this.memoryAdapter.getArticle(articleId);
+    return this.memoryAdapter.getArticle(articleId, authorId);
   }
 
-  async getVersion(versionId: string) {
+  async getVersion(versionId: string, authorId: string) {
     const dbResult = await this.tryPrisma(() =>
-      this.prismaAdapter.getVersion(versionId)
+      this.prismaAdapter.getVersion(versionId, authorId)
     );
     if (dbResult) {
       this.memoryAdapter.hydrateVersionDetails(dbResult);
       return dbResult;
     }
-    return this.memoryAdapter.getVersion(versionId);
+    return this.memoryAdapter.getVersion(versionId, authorId);
   }
 
   async saveVersion(payload: SaveVersionInput) {
@@ -958,11 +1134,24 @@ export class StorageManager {
         checkRun: dbResult.checkRun,
         content: payload.content,
         findings: payload.cleanFindings,
+        authorId: payload.authorId,
       });
       return dbResult;
     }
 
     return this.memoryAdapter.saveVersion(payload);
+  }
+
+  async deleteVersion(versionId: string, authorId: string) {
+    const dbResult = await this.tryPrisma(() =>
+      this.prismaAdapter.deleteVersion(versionId, authorId)
+    );
+    if (dbResult) {
+      await this.memoryAdapter.deleteVersion(versionId, authorId);
+      return dbResult;
+    }
+
+    return this.memoryAdapter.deleteVersion(versionId, authorId);
   }
 }
 

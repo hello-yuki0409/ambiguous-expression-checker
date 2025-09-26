@@ -5,6 +5,7 @@ import {
   fetchArticlesSummary,
   fetchArticleDetail,
   fetchVersionDetail,
+  deleteVersion,
   type ArticleDetail,
   type ArticleSummary,
   type VersionDetail,
@@ -82,6 +83,8 @@ export default function History() {
   const [diff, setDiff] = useState<{ left: VersionDetail; right: VersionDetail } | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const selectedSummaries = useMemo(() => {
     if (!article) return [] as VersionSummary[];
@@ -93,6 +96,7 @@ export default function History() {
   const loadSummaries = async () => {
     setLoading(true);
     setSummaryError(null);
+    setDeleteError(null);
     try {
       const list = await fetchArticlesSummary();
       setSummaries(list);
@@ -129,6 +133,7 @@ export default function History() {
     setSelectedVersions([]);
     setDiff(null);
     setDiffError(null);
+    setDeleteError(null);
 
     let cancelled = false;
     fetchArticleDetail(selectedArticleId)
@@ -196,6 +201,44 @@ export default function History() {
     setSelectedVersions([]);
     setDiff(null);
     setDiffError(null);
+  };
+
+  const handleDelete = async (versionId: string) => {
+    const target = article?.versions.find((v) => v.id === versionId);
+    const versionLabel = target ? `v${target.index + 1}` : "選択中のバージョン";
+    const confirmed = window.confirm(
+      `${versionLabel} を削除します。\nこの操作は取り消せません。`
+    );
+    if (!confirmed) return;
+
+    setDeleteError(null);
+    setDeleteLoadingId(versionId);
+    try {
+      await deleteVersion(versionId);
+
+      setArticle((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          versions: prev.versions.filter((v) => v.id !== versionId),
+        };
+      });
+
+      setSelectedVersions((prev) => prev.filter((id) => id !== versionId));
+      setDiff((prev) => {
+        if (!prev) return prev;
+        if (prev.left.id === versionId || prev.right.id === versionId) {
+          return null;
+        }
+        return prev;
+      });
+
+      await loadSummaries();
+    } catch (err) {
+      setDeleteError((err as Error).message || "削除に失敗しました");
+    } finally {
+      setDeleteLoadingId(null);
+    }
   };
 
   return (
@@ -339,6 +382,11 @@ export default function History() {
                     <span className={chipClass(selectedVersions.length === 2)}>2 件</span>
                   </div>
                 </div>
+                {deleteError && (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+                    {deleteError}
+                  </p>
+                )}
                 {article.versions.length === 0 ? (
                   <p className="rounded-xl border border-emerald-100 bg-white p-4 text-sm text-muted-foreground">
                     まだバージョンがありません。
@@ -379,14 +427,26 @@ export default function History() {
                                 </div>
                               )}
                             </div>
-                            <Button
-                              variant={selected ? "secondary" : "outline"}
-                              size="sm"
-                              className={selected ? "bg-emerald-500 text-white hover:bg-emerald-600" : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"}
-                              onClick={() => toggleVersion(version.id)}
-                            >
-                              {selected ? "選択解除" : "比較へ追加"}
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant={selected ? "secondary" : "outline"}
+                                size="sm"
+                                className={selected ? "bg-emerald-500 text-white hover:bg-emerald-600" : "border-emerald-200 text-emerald-600 hover:bg-emerald-50"}
+                                onClick={() => toggleVersion(version.id)}
+                                disabled={deleteLoadingId === version.id}
+                              >
+                                {selected ? "選択解除" : "比較へ追加"}
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                className="bg-red-600 text-white hover:bg-red-700"
+                                onClick={() => handleDelete(version.id)}
+                                disabled={deleteLoadingId === version.id}
+                              >
+                                {deleteLoadingId === version.id ? "削除中..." : "削除"}
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       );
