@@ -514,6 +514,7 @@ export default function History() {
                 {diff && !diffError && (
                   <div className="mt-4 overflow-hidden rounded-xl border border-emerald-100">
                     <DiffEditor
+                      key={`${diff.left.id}-${diff.right.id}`}
                       height="60vh"
                       language="markdown"
                       original={diff.left.content}

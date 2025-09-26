@@ -230,7 +230,9 @@ function mapVersion(
           id: raw.article.id,
           title: toNullableString(raw.article.title),
           authorLabel: toNullableString(raw.article.authorLabel),
-          authorId: toNullableString((raw.article as { authorId?: string | null })?.authorId),
+          authorId: toNullableString(
+            (raw.article as { authorId?: string | null })?.authorId
+          ),
         }
       : undefined,
     checkRuns: (raw.checkRuns ?? []).map((run) =>
@@ -448,7 +450,8 @@ class PrismaStorage implements StorageAdapter {
           }
 
           const currentAuthorId =
-            (articleRecord as unknown as { authorId?: string | null }).authorId ?? null;
+            (articleRecord as unknown as { authorId?: string | null })
+              .authorId ?? null;
           if (currentAuthorId && currentAuthorId !== authorId) {
             throw new Error("forbidden");
           }
@@ -477,7 +480,8 @@ class PrismaStorage implements StorageAdapter {
           }
 
           const currentAuthorId =
-            (articleRecord as unknown as { authorId?: string | null }).authorId ?? null;
+            (articleRecord as unknown as { authorId?: string | null })
+              .authorId ?? null;
           if (currentAuthorId !== authorId) {
             updateData.author = { connect: { id: authorId } };
           }
@@ -590,12 +594,10 @@ class PrismaStorage implements StorageAdapter {
           checkRuns: { select: { id: true } },
         },
       } as unknown as Parameters<typeof tx.articleVersion.findFirst>[0])) as
-        | (
-            RawVersion & {
-              articleId?: string | null;
-              checkRuns?: { id: string }[];
-            }
-          )
+        | (RawVersion & {
+            articleId?: string | null;
+            checkRuns?: { id: string }[];
+          })
         | null;
 
       if (!version) {
@@ -627,10 +629,6 @@ class PrismaStorage implements StorageAdapter {
     });
   }
 }
-
-// ---------------------------
-// In-memory fallback storage
-// ---------------------------
 
 type MemoryCheckRun = StoredCheckRun & { findings: StoredFinding[] };
 
@@ -709,9 +707,7 @@ class MemoryStorage implements StorageAdapter {
   ): Promise<StoredArticle[]> {
     const rows = [...this.articles.values()]
       .filter((article) => article.authorId === authorId)
-      .sort(
-      (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()
-    );
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const sliced = rows.slice(skip, skip + take);
     return sliced.map((article) => ({
       id: article.id,
@@ -1027,7 +1023,9 @@ class MemoryStorage implements StorageAdapter {
   async deleteVersion(versionId: string, authorId: string): Promise<boolean> {
     for (const article of this.articles.values()) {
       if (article.authorId !== authorId) continue;
-      const index = article.versions.findIndex((version) => version.id === versionId);
+      const index = article.versions.findIndex(
+        (version) => version.id === versionId
+      );
       if (index === -1) continue;
 
       const [removed] = article.versions.splice(index, 1);

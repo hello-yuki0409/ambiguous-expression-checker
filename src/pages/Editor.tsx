@@ -13,7 +13,7 @@ import {
   type RunHistory,
 } from "@/lib/history";
 import { saveVersion } from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import {
   AlertDialog,
   AlertDialogAction,
