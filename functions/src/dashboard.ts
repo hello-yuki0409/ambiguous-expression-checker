@@ -141,6 +141,61 @@ async function buildScoreTrend(uid: string): Promise<ScoreTrendEntry[]> {
     .reverse();
 }
 
+type CategoryTrendEntry = {
+  versionId: string;
+  createdAt: Date;
+  counts: Record<string, number>;
+};
+
+async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
+  const versions = await prisma.articleVersion.findMany({
+    where: { article: { authorId: uid } },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+    select: {
+      id: true,
+      createdAt: true,
+      checkRuns: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          findings: {
+            select: {
+              category: true,
+            },
+          },
+          createdAt: true,
+        },
+      },
+    },
+  });
+
+  if (!versions.length) {
+    return [];
+  }
+
+  const entries: CategoryTrendEntry[] = versions
+    .map((version) => {
+      const latestRun = version.checkRuns[0];
+      if (!latestRun) return null;
+
+      const counts: Record<string, number> = {};
+      latestRun.findings.forEach((finding) => {
+        counts[finding.category] = (counts[finding.category] ?? 0) + 1;
+      });
+
+      return {
+        versionId: version.id,
+        createdAt: latestRun.createdAt ?? version.createdAt,
+        counts,
+      } satisfies CategoryTrendEntry;
+    })
+    .filter((entry): entry is CategoryTrendEntry => entry !== null)
+    .reverse();
+
+  return entries;
+}
+
 export const dashboard = onRequest(
   { cors: true, timeoutSeconds: 30 },
   async (req: Request, res: Response) => {
@@ -156,11 +211,12 @@ export const dashboard = onRequest(
 
       const summary = await buildSummary(uid);
       const scoreTrend = await buildScoreTrend(uid);
+      const categoryTrend = await buildCategoryTrend(uid);
 
       res.json({
         summary,
         scoreTrend,
-        categoryTrend: [],
+        categoryTrend,
         frequentPhrases: [],
       });
     } catch (error) {
