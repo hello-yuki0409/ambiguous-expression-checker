@@ -7,6 +7,7 @@
       { "source": "/api/rewrite", "function": "rewrite" },
       { "source": "/api/versions", "function": "versions" },
       { "source": "/api/versions/**", "function": "versions" },
+      { "source": "/api/dashboard", "function": "dashboard" },
       { "source": "**", "destination": "/index.html" }
     ]
   },
