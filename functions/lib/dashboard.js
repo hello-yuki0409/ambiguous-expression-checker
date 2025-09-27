@@ -147,6 +147,59 @@ async function buildCategoryTrend(uid) {
         .reverse();
     return entries;
 }
+async function buildFrequentPhrases(uid) {
+    const findings = await db_1.prisma.finding.findMany({
+        where: { run: { version: { article: { authorId: uid } } } },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: {
+            matchedText: true,
+            category: true,
+            severity: true,
+            createdAt: true,
+        },
+    });
+    if (!findings.length) {
+        return [];
+    }
+    const bucket = new Map();
+    findings.forEach((finding) => {
+        const key = `${finding.category}__${finding.matchedText}`;
+        const entry = bucket.get(key);
+        if (!entry) {
+            bucket.set(key, {
+                matchedText: finding.matchedText,
+                category: finding.category,
+                totalCount: 1,
+                severitySum: finding.severity,
+                lastFoundAt: finding.createdAt,
+            });
+        }
+        else {
+            entry.totalCount += 1;
+            entry.severitySum += finding.severity;
+            if (entry.lastFoundAt < finding.createdAt) {
+                entry.lastFoundAt = finding.createdAt;
+            }
+        }
+    });
+    const entries = [...bucket.values()]
+        .map((value) => ({
+        matchedText: value.matchedText,
+        category: value.category,
+        totalCount: value.totalCount,
+        severityAvg: value.severitySum / value.totalCount,
+        lastFoundAt: value.lastFoundAt,
+    }))
+        .sort((a, b) => {
+        if (b.totalCount !== a.totalCount) {
+            return b.totalCount - a.totalCount;
+        }
+        return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
+    })
+        .slice(0, 10);
+    return entries;
+}
 exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
         if (req.method !== "GET") {
@@ -159,11 +212,12 @@ exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, a
         const summary = await buildSummary(uid);
         const scoreTrend = await buildScoreTrend(uid);
         const categoryTrend = await buildCategoryTrend(uid);
+        const frequentPhrases = await buildFrequentPhrases(uid);
         res.json({
             summary,
             scoreTrend,
             categoryTrend,
-            frequentPhrases: [],
+            frequentPhrases,
         });
     }
     catch (error) {

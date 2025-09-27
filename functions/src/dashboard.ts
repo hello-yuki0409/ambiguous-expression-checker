@@ -147,6 +147,14 @@ type CategoryTrendEntry = {
   counts: Record<string, number>;
 };
 
+type FrequentPhraseEntry = {
+  matchedText: string;
+  category: string;
+  totalCount: number;
+  severityAvg: number;
+  lastFoundAt: Date;
+};
+
 async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
   const versions = await prisma.articleVersion.findMany({
     where: { article: { authorId: uid } },
@@ -196,6 +204,70 @@ async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
   return entries;
 }
 
+async function buildFrequentPhrases(uid: string): Promise<FrequentPhraseEntry[]> {
+  const findings = await prisma.finding.findMany({
+    where: { run: { version: { article: { authorId: uid } } } },
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select: {
+      matchedText: true,
+      category: true,
+      severity: true,
+      createdAt: true,
+    },
+  });
+
+  if (!findings.length) {
+    return [];
+  }
+
+  const bucket = new Map<string, {
+    matchedText: string;
+    category: string;
+    totalCount: number;
+    severitySum: number;
+    lastFoundAt: Date;
+  }>();
+
+  findings.forEach((finding) => {
+    const key = `${finding.category}__${finding.matchedText}`;
+    const entry = bucket.get(key);
+    if (!entry) {
+      bucket.set(key, {
+        matchedText: finding.matchedText,
+        category: finding.category,
+        totalCount: 1,
+        severitySum: finding.severity,
+        lastFoundAt: finding.createdAt,
+      });
+    } else {
+      entry.totalCount += 1;
+      entry.severitySum += finding.severity;
+      if (entry.lastFoundAt < finding.createdAt) {
+        entry.lastFoundAt = finding.createdAt;
+      }
+    }
+  });
+
+  const entries: FrequentPhraseEntry[] = [...bucket.values()]
+    .map((value) => ({
+      matchedText: value.matchedText,
+      category: value.category,
+      totalCount: value.totalCount,
+      severityAvg: value.severitySum / value.totalCount,
+      lastFoundAt: value.lastFoundAt,
+    }))
+    .sort((a, b) => {
+      if (b.totalCount !== a.totalCount) {
+        return b.totalCount - a.totalCount;
+      }
+      return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
+    })
+    .slice(0, 10);
+
+  return entries;
+}
+
 export const dashboard = onRequest(
   { cors: true, timeoutSeconds: 30 },
   async (req: Request, res: Response) => {
@@ -212,12 +284,13 @@ export const dashboard = onRequest(
       const summary = await buildSummary(uid);
       const scoreTrend = await buildScoreTrend(uid);
       const categoryTrend = await buildCategoryTrend(uid);
+      const frequentPhrases = await buildFrequentPhrases(uid);
 
       res.json({
         summary,
         scoreTrend,
         categoryTrend,
-        frequentPhrases: [],
+        frequentPhrases,
       });
     } catch (error) {
       console.error("[dashboard] unexpected_error", error);
