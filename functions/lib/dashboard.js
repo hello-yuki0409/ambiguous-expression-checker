@@ -103,6 +103,50 @@ async function buildScoreTrend(uid) {
         .filter((entry) => entry !== null)
         .reverse();
 }
+async function buildCategoryTrend(uid) {
+    const versions = await db_1.prisma.articleVersion.findMany({
+        where: { article: { authorId: uid } },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        select: {
+            id: true,
+            createdAt: true,
+            checkRuns: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: {
+                    findings: {
+                        select: {
+                            category: true,
+                        },
+                    },
+                    createdAt: true,
+                },
+            },
+        },
+    });
+    if (!versions.length) {
+        return [];
+    }
+    const entries = versions
+        .map((version) => {
+        const latestRun = version.checkRuns[0];
+        if (!latestRun)
+            return null;
+        const counts = {};
+        latestRun.findings.forEach((finding) => {
+            counts[finding.category] = (counts[finding.category] ?? 0) + 1;
+        });
+        return {
+            versionId: version.id,
+            createdAt: latestRun.createdAt ?? version.createdAt,
+            counts,
+        };
+    })
+        .filter((entry) => entry !== null)
+        .reverse();
+    return entries;
+}
 exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
         if (req.method !== "GET") {
@@ -114,10 +158,11 @@ exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, a
         console.log("[dashboard] request", { uid });
         const summary = await buildSummary(uid);
         const scoreTrend = await buildScoreTrend(uid);
+        const categoryTrend = await buildCategoryTrend(uid);
         res.json({
             summary,
             scoreTrend,
-            categoryTrend: [],
+            categoryTrend,
             frequentPhrases: [],
         });
     }
