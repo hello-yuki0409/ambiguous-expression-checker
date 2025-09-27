@@ -23,6 +23,18 @@ type SummaryPayload = {
   };
 };
 
+type ScoreTrendEntry = {
+  runId: string;
+  versionId: string;
+  articleId: string;
+  articleTitle: string | null;
+  index: number;
+  createdAt: Date;
+  aimaiScore: number;
+  totalCount: number;
+  charLength: number;
+};
+
 async function buildSummary(uid: string): Promise<SummaryPayload> {
   // ひとまず最新のバージョン 2 件を拾う。必要があればあとで絞り込みを調整する。
   const versions = await prisma.articleVersion.findMany({
@@ -88,6 +100,47 @@ async function buildSummary(uid: string): Promise<SummaryPayload> {
   return { latest, previous, diff };
 }
 
+async function buildScoreTrend(uid: string): Promise<ScoreTrendEntry[]> {
+  const runs = await prisma.checkRun.findMany({
+    where: { version: { article: { authorId: uid } } },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: {
+      version: {
+        select: {
+          id: true,
+          articleId: true,
+          index: true,
+          createdAt: true,
+          article: { select: { title: true } },
+        },
+      },
+    },
+  });
+
+  if (!runs.length) {
+    return [];
+  }
+
+  return runs
+    .map((run) => {
+      if (!run.version) return null;
+      return {
+        runId: run.id,
+        versionId: run.versionId,
+        articleId: run.version.articleId,
+        articleTitle: run.version.article?.title ?? null,
+        index: run.version.index,
+        createdAt: run.createdAt,
+        aimaiScore: run.aimaiScore,
+        totalCount: run.totalCount,
+        charLength: run.charLength,
+      } satisfies ScoreTrendEntry;
+    })
+    .filter((entry): entry is ScoreTrendEntry => entry !== null)
+    .reverse();
+}
+
 export const dashboard = onRequest(
   { cors: true, timeoutSeconds: 30 },
   async (req: Request, res: Response) => {
@@ -102,10 +155,11 @@ export const dashboard = onRequest(
       console.log("[dashboard] request", { uid });
 
       const summary = await buildSummary(uid);
+      const scoreTrend = await buildScoreTrend(uid);
 
       res.json({
         summary,
-        scoreTrend: [], // ここから追加の集計を埋めていくがんばれ俺
+        scoreTrend,
         categoryTrend: [],
         frequentPhrases: [],
       });

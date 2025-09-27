@@ -64,6 +64,45 @@ async function buildSummary(uid) {
     }
     return { latest, previous, diff };
 }
+async function buildScoreTrend(uid) {
+    const runs = await db_1.prisma.checkRun.findMany({
+        where: { version: { article: { authorId: uid } } },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+            version: {
+                select: {
+                    id: true,
+                    articleId: true,
+                    index: true,
+                    createdAt: true,
+                    article: { select: { title: true } },
+                },
+            },
+        },
+    });
+    if (!runs.length) {
+        return [];
+    }
+    return runs
+        .map((run) => {
+        if (!run.version)
+            return null;
+        return {
+            runId: run.id,
+            versionId: run.versionId,
+            articleId: run.version.articleId,
+            articleTitle: run.version.article?.title ?? null,
+            index: run.version.index,
+            createdAt: run.createdAt,
+            aimaiScore: run.aimaiScore,
+            totalCount: run.totalCount,
+            charLength: run.charLength,
+        };
+    })
+        .filter((entry) => entry !== null)
+        .reverse();
+}
 exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
     try {
         if (req.method !== "GET") {
@@ -74,9 +113,10 @@ exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, a
         const uid = decoded.uid;
         console.log("[dashboard] request", { uid });
         const summary = await buildSummary(uid);
+        const scoreTrend = await buildScoreTrend(uid);
         res.json({
             summary,
-            scoreTrend: [], // TODO: ここから追加の集計を埋めていく
+            scoreTrend,
             categoryTrend: [],
             frequentPhrases: [],
         });
