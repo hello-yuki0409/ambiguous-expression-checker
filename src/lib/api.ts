@@ -61,6 +61,59 @@ type VersionDetail = {
   checkRun: (CheckRunSummary & { findings: FindingDetail[] }) | null;
 };
 
+type DashboardSummary = {
+  latest: {
+    versionId: string;
+    articleId: string;
+    articleTitle: string | null;
+    index: number;
+    createdAt: string;
+    aimaiScore: number;
+    totalCount: number;
+    charLength: number;
+  } | null;
+  previous: DashboardSummary["latest"];
+  diff: {
+    countDiff: number;
+    countPercent: number | null;
+    scoreDiff: number;
+    scorePercent: number | null;
+  } | null;
+};
+
+type DashboardScoreTrendEntry = {
+  runId: string;
+  versionId: string;
+  articleId: string;
+  articleTitle: string | null;
+  index: number;
+  createdAt: string;
+  aimaiScore: number;
+  totalCount: number;
+  charLength: number;
+};
+
+type DashboardCategoryTrendEntry = {
+  versionId: string;
+  createdAt: string;
+  counts: Record<string, number>;
+};
+
+type DashboardFrequentPhraseEntry = {
+  matchedText: string;
+  category: string;
+  totalCount: number;
+  severityAvg: number;
+  lastFoundAt: string;
+};
+
+type DashboardResponse = {
+  summary: DashboardSummary;
+  scoreTrend: DashboardScoreTrendEntry[];
+  categoryTrend: DashboardCategoryTrendEntry[];
+  frequentPhrases: DashboardFrequentPhraseEntry[];
+};
+
 type SaveVersionRequest = {
   articleId?: string | null;
   title?: string | null;
@@ -158,6 +211,11 @@ export async function deleteVersion(versionId: string) {
   );
 }
 
+export async function fetchDashboard() {
+  const data = await request<DashboardResponse>("/api/dashboard");
+  return data;
+}
+
 export type {
   ArticleDetail,
   ArticleSummary,
@@ -167,4 +225,9 @@ export type {
   SaveVersionResponse,
   VersionDetail,
   VersionSummary,
+  DashboardSummary,
+  DashboardScoreTrendEntry,
+  DashboardCategoryTrendEntry,
+  DashboardFrequentPhraseEntry,
+  DashboardResponse,
 };
