@@ -32,7 +32,7 @@ export default function Dashboard() {
           (err as Error).message ?? "ダッシュボードの読み込みに失敗しました"
         );
       } finally {
-        // ❌ return しない
+        // try/catch 内で return したらダメでした。
         if (!cancelled) {
           setLoading(false);
         }
