@@ -26,13 +26,21 @@ function MetricCard({
   title,
   body,
   footer,
+  highlight = false,
 }: {
   title: string;
   body: React.ReactNode;
   footer?: React.ReactNode;
+  highlight?: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+    <div
+      className={`rounded-2xl border p-5 shadow-sm transition ${
+        highlight
+          ? "border-emerald-300 bg-gradient-to-br from-emerald-100/70 via-white to-white"
+          : "border-emerald-100 bg-white/80"
+      }`}
+    >
       <h3 className="text-sm font-semibold text-emerald-700">{title}</h3>
       <div className="mt-3 space-y-1 text-sm text-slate-800">{body}</div>
       {footer ? (
@@ -70,6 +78,7 @@ export function SummarySection({ summary }: { summary: DashboardSummary }) {
           </>
         }
         footer={`作成: ${formatDate(latest.createdAt)}`}
+        highlight
       />
 
       <MetricCard
