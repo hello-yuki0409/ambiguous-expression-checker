@@ -46,7 +46,6 @@ export default function Editor() {
 
   // 👇 Phase3 用 state
   const [selected, setSelected] = useState<Finding | null>(null);
-  const [tone, setTone] = useState<"敬体" | "常体">("敬体");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -288,15 +287,6 @@ export default function Editor() {
                 >
                   クリア
                 </Button>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value as "敬体" | "常体")}
-                  className="rounded-lg border border-emerald-200 px-3 py-2 text-xs text-emerald-700 focus:outline-none"
-                  aria-label="tone"
-                >
-                  <option value="敬体">敬体</option>
-                  <option value="常体">常体</option>
-                </select>
                 <Button onClick={runCheck} className="bg-emerald-500 text-white hover:bg-emerald-600">
                   チェック
                 </Button>
@@ -345,9 +335,6 @@ export default function Editor() {
                 <h2 className="text-sm font-semibold text-emerald-700">
                   検出一覧（{findings.length}件）
                 </h2>
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-medium text-emerald-700">
-                  {tone}
-                </span>
               </div>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 項目をクリックすると該当位置へジャンプし、「候補」ボタンでリライトを確認できます。
@@ -425,7 +412,7 @@ export default function Editor() {
         open={!!selected}
         onOpenChange={(v) => !v && setSelected(null)}
         original={selected?.text ?? ""}
-        style={tone}
+        style="敬体"
         onReplace={replaceSelected}
       />
       </div>

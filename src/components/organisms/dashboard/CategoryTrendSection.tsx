@@ -33,6 +33,14 @@ const CATEGORY_COLORS: Record<string, string> = {
   OTHER: "#94a3b8",
 };
 
+const CATEGORY_LABELS: Record<(typeof CATEGORY_ORDER)[number], string> = {
+  HEDGING: "推量・断定回避",
+  VAGUE: "ぼかし",
+  QUANTITY: "数量曖昧",
+  RESPONSIBILITY: "責任回避",
+  OTHER: "その他",
+};
+
 function buildChartData(entries: DashboardCategoryTrendEntry[]) {
   return entries.map((entry, idx) => {
     const base: Record<string, number | string | Date> = {
@@ -69,11 +77,15 @@ function TooltipContent(props: TooltipContentProps<ValueType, NameType>) {
       <p className="font-semibold text-slate-900">{String(dataPoint.name)}</p>
       <p className="text-muted-foreground">{createdAt}</p>
       <div className="mt-2 space-y-1">
-        {payloadItems.map((entry) => (
-          <p key={String(entry.dataKey)} style={{ color: entry.color }}>
-            {String(entry.dataKey)}: {entry.value}
-          </p>
-        ))}
+        {payloadItems.map((entry) => {
+          const key = String(entry.dataKey) as (typeof CATEGORY_ORDER)[number];
+          const label = CATEGORY_LABELS[key] ?? key;
+          return (
+            <p key={key} style={{ color: entry.color }}>
+              {label}: {entry.value}
+            </p>
+          );
+        })}
       </div>
     </div>
   );
@@ -114,11 +126,17 @@ export function CategoryTrendSection({
             <XAxis dataKey="name" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
             <Tooltip content={TooltipContent} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Legend
+              wrapperStyle={{ fontSize: 12 }}
+              formatter={(value) =>
+                CATEGORY_LABELS[value as (typeof CATEGORY_ORDER)[number]] ?? value
+              }
+            />
             {CATEGORY_ORDER.map((category, idx) => (
               <Bar
                 key={category}
                 dataKey={category}
+                name={CATEGORY_LABELS[category]}
                 stackId="counts"
                 fill={CATEGORY_COLORS[category]}
                 radius={

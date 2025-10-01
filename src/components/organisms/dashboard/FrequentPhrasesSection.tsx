@@ -49,7 +49,7 @@ export function FrequentPhrasesSection({ entries }: { entries: DashboardFrequent
               <th className="px-3 py-2">語句</th>
               <th className="px-3 py-2">カテゴリ</th>
               <th className="px-3 py-2 text-right">件数</th>
-              <th className="px-3 py-2 text-right">平均Severity</th>
+              <th className="px-3 py-2 text-right">平均重要度</th>
               <th className="px-3 py-2">最終検出日時</th>
             </tr>
           </thead>
