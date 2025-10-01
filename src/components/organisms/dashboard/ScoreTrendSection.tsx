@@ -86,10 +86,14 @@ export function ScoreTrendSection({
             <XAxis dataKey="name" tick={{ fontSize: 12 }} />
             <YAxis tick={{ fontSize: 12 }} domain={[0, "auto"]} />
             <Tooltip content={TooltipContent} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <Legend
+              wrapperStyle={{ fontSize: 12 }}
+              formatter={(value) => (value === "aimaiScore" ? "曖昧度スコア" : "曖昧件数")}
+            />
             <Line
               type="monotone"
               dataKey="aimaiScore"
+              name="曖昧度スコア"
               stroke="#059669"
               strokeWidth={2}
               dot={{ r: 4 }}
@@ -97,6 +101,7 @@ export function ScoreTrendSection({
             <Line
               type="monotone"
               dataKey="totalCount"
+              name="曖昧件数"
               stroke="#0ea5e9"
               strokeWidth={2}
               dot={{ r: 4 }}
