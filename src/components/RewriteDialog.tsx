@@ -14,7 +14,8 @@ type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   original: string;
-  style: "敬体" | "常体";
+  context: string;
+  style?: "敬体" | "常体";
   onReplace: (newText: string) => void;
 };
 
@@ -22,10 +23,12 @@ export default function RewriteDialog({
   open,
   onOpenChange,
   original,
+  context,
   style,
   onReplace,
 }: Props) {
   const [candidate, setCandidate] = useState("");
+  const [reason, setReason] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -33,6 +36,7 @@ export default function RewriteDialog({
   useEffect(() => {
     if (open) {
       setCandidate("");
+      setReason("");
       setError(null);
       setLoading(false);
     }
@@ -42,12 +46,17 @@ export default function RewriteDialog({
     setLoading(true);
     setError(null);
     try {
-      const c = await rewriteText(original, style); // api.ts 側は !ok で throw する
-      if (!c) {
+      const response = await rewriteText({
+        text: original,
+        context,
+        style,
+      });
+      if (!response.rewrite) {
         // 一応 null の場合もメッセージを出す
         setError("候補を生成できませんでした。少し待って再度お試しください。");
       } else {
-        setCandidate(c);
+        setCandidate(response.rewrite);
+        setReason(response.reason ?? "");
       }
     } catch (e) {
       const msg = (e as Error).message || "エラーが発生しました。";
@@ -93,6 +102,11 @@ export default function RewriteDialog({
               <p className="p-2 border rounded bg-muted/30 whitespace-pre-wrap">
                 {candidate}
               </p>
+              {reason && (
+                <p className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+                  {reason}
+                </p>
+              )}
             </>
           )}
         </div>

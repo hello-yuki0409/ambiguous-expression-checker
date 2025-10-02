@@ -412,6 +412,7 @@ export default function Editor() {
         open={!!selected}
         onOpenChange={(v) => !v && setSelected(null)}
         original={selected?.text ?? ""}
+        context={content}
         style="敬体"
         onReplace={replaceSelected}
       />
