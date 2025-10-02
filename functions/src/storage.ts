@@ -369,46 +369,99 @@ class PrismaStorage implements StorageAdapter {
     versionId: string,
     authorId: string
   ): Promise<StoredVersion | null> {
-    const row = (await prisma.articleVersion.findFirst({
-      where: { id: versionId, article: { authorId } },
-      select: {
-        id: true,
-        index: true,
-        title: true,
-        content: true,
-        createdAt: true,
-        article: {
-          select: { id: true, title: true, authorLabel: true, authorId: true },
-        },
-        checkRuns: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          select: {
-            id: true,
-            aimaiScore: true,
-            totalCount: true,
-            charLength: true,
-            createdAt: true,
-            findings: {
-              orderBy: { start: "asc" },
-              select: {
-                id: true,
-                start: true,
-                end: true,
-                matchedText: true,
-                category: true,
-                severity: true,
-                reason: true,
-                patternId: true,
-              },
+    const select = {
+      id: true,
+      index: true,
+      title: true,
+      content: true,
+      createdAt: true,
+      articleId: true,
+      article: {
+        select: { id: true, title: true, authorLabel: true, authorId: true },
+      },
+      checkRuns: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: {
+          id: true,
+          aimaiScore: true,
+          totalCount: true,
+          charLength: true,
+          createdAt: true,
+          findings: {
+            orderBy: { start: "asc" },
+            select: {
+              id: true,
+              start: true,
+              end: true,
+              matchedText: true,
+              category: true,
+              severity: true,
+              reason: true,
+              patternId: true,
             },
           },
         },
       },
+    } as const;
+
+    const convert = (raw: RawVersion | null) =>
+      raw ? mapVersion(raw, { includeContent: true, includeFindings: true }) : null;
+
+    const owned = (await prisma.articleVersion.findFirst({
+      where: { id: versionId, article: { authorId } },
+      select,
+    } as unknown as Parameters<typeof prisma.articleVersion.findFirst>[0])) as RawVersion | null;
+    if (owned) {
+      return convert(owned);
+    }
+
+    const candidate = (await prisma.articleVersion.findFirst({
+      where: { id: versionId },
+      select,
     } as unknown as Parameters<typeof prisma.articleVersion.findFirst>[0])) as RawVersion | null;
 
-    if (!row) return null;
-    return mapVersion(row, { includeContent: true, includeFindings: true });
+    if (!candidate) {
+      return null;
+    }
+
+    const articleId =
+      candidate.articleId ??
+      (candidate as unknown as { article_id?: string | null }).article_id ??
+      null;
+    const currentAuthorId = candidate.article?.authorId ?? null;
+
+    if (currentAuthorId && currentAuthorId !== authorId) {
+      return null;
+    }
+
+    if (!articleId) {
+      return convert(candidate);
+    }
+
+    if (!currentAuthorId) {
+      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+        await tx.user.upsert({
+          where: { id: authorId },
+          update: {},
+          create: { id: authorId, authorLabel: null },
+        } as unknown as Parameters<typeof tx.user.upsert>[0]);
+
+        await tx.article.update({
+          where: { id: articleId },
+          data: { author: { connect: { id: authorId } } },
+        } as unknown as Parameters<typeof tx.article.update>[0]);
+      });
+
+      const claimed = (await prisma.articleVersion.findFirst({
+        where: { id: versionId, article: { authorId } },
+        select,
+      } as unknown as Parameters<typeof prisma.articleVersion.findFirst>[0])) as RawVersion | null;
+
+      return convert(claimed ?? candidate);
+    }
+
+    return convert(candidate);
   }
 
   async saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult> {

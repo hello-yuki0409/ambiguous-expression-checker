@@ -164,46 +164,85 @@ class PrismaStorage {
         return mapArticle(row, { includeContent: false, includeFindings: false });
     }
     async getVersion(versionId, authorId) {
-        const row = (await db_1.prisma.articleVersion.findFirst({
-            where: { id: versionId, article: { authorId } },
-            select: {
-                id: true,
-                index: true,
-                title: true,
-                content: true,
-                createdAt: true,
-                article: {
-                    select: { id: true, title: true, authorLabel: true, authorId: true },
-                },
-                checkRuns: {
-                    orderBy: { createdAt: "desc" },
-                    take: 1,
-                    select: {
-                        id: true,
-                        aimaiScore: true,
-                        totalCount: true,
-                        charLength: true,
-                        createdAt: true,
-                        findings: {
-                            orderBy: { start: "asc" },
-                            select: {
-                                id: true,
-                                start: true,
-                                end: true,
-                                matchedText: true,
-                                category: true,
-                                severity: true,
-                                reason: true,
-                                patternId: true,
-                            },
+        const select = {
+            id: true,
+            index: true,
+            title: true,
+            content: true,
+            createdAt: true,
+            articleId: true,
+            article: {
+                select: { id: true, title: true, authorLabel: true, authorId: true },
+            },
+            checkRuns: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: {
+                    id: true,
+                    aimaiScore: true,
+                    totalCount: true,
+                    charLength: true,
+                    createdAt: true,
+                    findings: {
+                        orderBy: { start: "asc" },
+                        select: {
+                            id: true,
+                            start: true,
+                            end: true,
+                            matchedText: true,
+                            category: true,
+                            severity: true,
+                            reason: true,
+                            patternId: true,
                         },
                     },
                 },
             },
+        };
+        const convert = (raw) => raw ? mapVersion(raw, { includeContent: true, includeFindings: true }) : null;
+        const owned = (await db_1.prisma.articleVersion.findFirst({
+            where: { id: versionId, article: { authorId } },
+            select,
         }));
-        if (!row)
+        if (owned) {
+            return convert(owned);
+        }
+        const candidate = (await db_1.prisma.articleVersion.findFirst({
+            where: { id: versionId },
+            select,
+        }));
+        if (!candidate) {
             return null;
-        return mapVersion(row, { includeContent: true, includeFindings: true });
+        }
+        const articleId = candidate.articleId ??
+            candidate.article_id ??
+            null;
+        const currentAuthorId = candidate.article?.authorId ?? null;
+        if (currentAuthorId && currentAuthorId !== authorId) {
+            return null;
+        }
+        if (!articleId) {
+            return convert(candidate);
+        }
+        if (!currentAuthorId) {
+            await db_1.prisma.$transaction(async (tx) => {
+                await tx.user.upsert({
+                    where: { id: authorId },
+                    update: {},
+                    create: { id: authorId, authorLabel: null },
+                });
+                await tx.article.update({
+                    where: { id: articleId },
+                    data: { author: { connect: { id: authorId } } },
+                });
+            });
+            const claimed = (await db_1.prisma.articleVersion.findFirst({
+                where: { id: versionId, article: { authorId } },
+                select,
+            }));
+            return convert(claimed ?? candidate);
+        }
+        return convert(candidate);
     }
     async saveVersion(payload) {
         const { articleId, title, authorLabel, authorId, content, cleanFindings, charLength, totalCount, aimaiScore, } = payload;

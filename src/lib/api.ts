@@ -167,13 +167,28 @@ async function request<TResponse>(
   return (json ?? {}) as TResponse;
 }
 
-export async function rewriteText(text: string, style: "敬体" | "常体") {
-  const data = await request<{ candidate?: string | null }>("/api/rewrite", {
-    method: "POST",
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ text, style }),
-  });
-  return data.candidate?.trim() ?? null;
+export type RewriteResponse = {
+  rewrite: string | null;
+  reason: string | null;
+};
+
+export async function rewriteText(payload: {
+  text: string;
+  context: string;
+  style?: "敬体" | "常体";
+}) {
+  const data = await request<{ rewrite?: string | null; reason?: string | null }>(
+    "/api/rewrite",
+    {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(payload),
+    }
+  );
+  return {
+    rewrite: data.rewrite?.trim() ?? null,
+    reason: data.reason?.trim() ?? null,
+  } satisfies RewriteResponse;
 }
 
 export async function saveVersion(payload: SaveVersionRequest) {
