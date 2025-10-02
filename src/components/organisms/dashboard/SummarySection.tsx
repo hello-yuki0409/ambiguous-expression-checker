@@ -22,6 +22,15 @@ function formatPercent(value: number | null | undefined) {
   return `${sign}${rounded}%`;
 }
 
+function diffTextClass(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "text-muted-foreground";
+  }
+  if (value > 0) return "text-red-600";
+  if (value < 0) return "text-emerald-600";
+  return "text-muted-foreground";
+}
+
 function MetricCard({
   title,
   body,
@@ -105,11 +114,17 @@ export function SummarySection({ summary }: { summary: DashboardSummary }) {
         body={
           diff ? (
             <>
-              <p>
-                件数: <span className="font-semibold">{diff.countDiff}</span> / {formatPercent(diff.countPercent)}
+              <p className={`font-semibold ${diffTextClass(diff.countDiff)}`}>
+                件数: {diff.countDiff > 0 ? `+${diff.countDiff}` : diff.countDiff}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {formatPercent(diff.countPercent)}
+                </span>
               </p>
-              <p>
-                スコア: <span className="font-semibold">{formatScore(diff.scoreDiff)}</span> / {formatPercent(diff.scorePercent)}
+              <p className={`font-semibold ${diffTextClass(diff.scoreDiff)}`}>
+                スコア: {formatScore(diff.scoreDiff)}
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {formatPercent(diff.scorePercent)}
+                </span>
               </p>
             </>
           ) : (

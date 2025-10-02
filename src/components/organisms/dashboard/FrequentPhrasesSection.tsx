@@ -57,7 +57,7 @@ export function FrequentPhrasesSection({ entries }: { entries: DashboardFrequent
             {entries.map((entry, index) => (
               <tr
                 key={`${entry.category}-${entry.matchedText}`}
-                className="border-t border-emerald-100 hover:bg-emerald-50/40"
+                className="border-t border-emerald-100 hover:bg-emerald-50/40 even:bg-emerald-50/20"
               >
                 <td className="px-3 py-2 font-medium text-slate-900">
                   <div className="flex items-baseline gap-2">
