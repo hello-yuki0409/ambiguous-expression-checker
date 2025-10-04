@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { rewriteText } from "@/lib/api";
+import type { Finding } from "@/lib/detection";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -15,6 +16,7 @@ type Props = {
   onOpenChange: (v: boolean) => void;
   original: string;
   context: string;
+  category?: Finding["category"];
   style?: "敬体" | "常体";
   onReplace: (newText: string) => void;
 };
@@ -24,6 +26,7 @@ export default function RewriteDialog({
   onOpenChange,
   original,
   context,
+  category,
   style,
   onReplace,
 }: Props) {
@@ -49,6 +52,7 @@ export default function RewriteDialog({
       const response = await rewriteText({
         text: original,
         context,
+        category,
         style,
       });
       if (!response.rewrite) {

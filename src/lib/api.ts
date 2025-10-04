@@ -175,6 +175,7 @@ export type RewriteResponse = {
 export async function rewriteText(payload: {
   text: string;
   context: string;
+  category?: string | null;
   style?: "敬体" | "常体";
 }) {
   const data = await request<{ rewrite?: string | null; reason?: string | null }>(

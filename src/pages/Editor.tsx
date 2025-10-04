@@ -19,6 +19,22 @@ import { ConfirmDialog } from "@/components/molecules/dialogs/ConfirmDialog";
 const STORAGE_KEY = "aimai__lastContent";
 const TITLE_KEY = "aimai__articleTitle";
 const ARTICLE_ID_KEY = "aimai__articleId";
+const CONTEXT_RADIUS = 120;
+
+function buildContextSnippet(
+  source: string,
+  start: number,
+  end: number,
+  radius = CONTEXT_RADIUS
+) {
+  if (!source.length) {
+    return "";
+  }
+  const safeStart = Math.max(0, start - radius);
+  const safeEnd = Math.min(source.length, end + radius);
+  const snippet = source.slice(safeStart, safeEnd);
+  return snippet.trim() ? snippet : source;
+}
 
 export default function Editor() {
   const { user } = useAuth();
@@ -412,7 +428,10 @@ export default function Editor() {
         open={!!selected}
         onOpenChange={(v) => !v && setSelected(null)}
         original={selected?.text ?? ""}
-        context={content}
+        context={
+          selected ? buildContextSnippet(content, selected.start, selected.end) : content
+        }
+        category={selected?.category}
         style="敬体"
         onReplace={replaceSelected}
       />

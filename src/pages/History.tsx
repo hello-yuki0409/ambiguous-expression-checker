@@ -583,6 +583,7 @@ export default function History() {
                         fontSize: 14,
                         renderSideBySide: true,
                         wordWrap: "on",
+                        diffWordWrap: "on",
                         minimap: { enabled: false },
                       }}
                     />
