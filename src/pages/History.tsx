@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
+import type { editor as MonacoEditor } from "monaco-editor";
 import { Button } from "@/components/ui/button";
 import {
   fetchArticlesSummary,
@@ -68,6 +69,14 @@ function chipClass(isActive: boolean) {
       : "border-transparent bg-muted/40 text-muted-foreground"
   }`;
 }
+
+// DiffEditor の自動リサイズがうまく働かないことがあるので、マウント時に wordWrap を設定し直す
+const handleDiffMount = (diffEditor: MonacoEditor.IStandaloneDiffEditor) => {
+  const original = diffEditor.getOriginalEditor();
+  const modified = diffEditor.getModifiedEditor();
+  original?.updateOptions({ wordWrap: "on", wrappingIndent: "same" });
+  modified?.updateOptions({ wordWrap: "on", wrappingIndent: "same" });
+};
 
 export default function History() {
   const [summaries, setSummaries] = useState<ArticleSummary[]>([]);
@@ -578,6 +587,7 @@ export default function History() {
                       modified={diff && !diffError ? diff.right.content : ""}
                       keepCurrentOriginalModel
                       keepCurrentModifiedModel
+                      onMount={handleDiffMount}
                       options={{
                         readOnly: true,
                         fontSize: 14,
