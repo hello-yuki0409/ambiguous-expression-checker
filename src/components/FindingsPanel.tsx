@@ -9,6 +9,14 @@ type Props = {
   onSelect?: (f: Finding) => void; // 候補モーダルを開く用
 };
 
+const CATEGORY_LABELS: Record<Finding["category"], string> = {
+  HEDGING: "推量・断定回避",
+  VAGUE: "ぼかし",
+  QUANTITY: "数量曖昧",
+  RESPONSIBILITY: "責任回避",
+  OTHER: "その他",
+};
+
 export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
   const [sort, setSort] = useState<SortMode>("order");
 
@@ -73,7 +81,7 @@ export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
                 className={`inline-block w-2 h-2 rounded-full sev-${f.severity}`}
               />
               <span className="font-mono text-[11px] opacity-70">
-                [{f.category}]
+                [{CATEGORY_LABELS[f.category] ?? f.category}]
               </span>
               <span className="truncate">{f.text}</span>
             </div>
