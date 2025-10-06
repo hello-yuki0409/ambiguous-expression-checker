@@ -29,7 +29,7 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b">
+      <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur supports-[backdrop-filter]:bg-white/60">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 p-4">
           <nav className="flex gap-3">
             <NavLink
