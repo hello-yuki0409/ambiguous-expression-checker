@@ -274,6 +274,7 @@ interface StorageAdapter {
   ): Promise<StoredVersion | null>;
   saveVersion(payload: SaveVersionInput): Promise<SaveVersionResult>;
   deleteVersion(versionId: string, authorId: string): Promise<boolean>;
+  deleteArticle(articleId: string, authorId: string): Promise<boolean>;
 }
 
 class PrismaStorage implements StorageAdapter {
@@ -677,6 +678,60 @@ class PrismaStorage implements StorageAdapter {
           data: { updatedAt: new Date() },
         } as unknown as Parameters<typeof tx.article.update>[0]);
       }
+
+      return true;
+    });
+  }
+
+  async deleteArticle(articleId: string, authorId: string): Promise<boolean> {
+    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const article = (await tx.article.findFirst({
+        where: { id: articleId, authorId },
+        select: {
+          id: true,
+          versions: {
+            select: {
+              id: true,
+              checkRuns: { select: { id: true } },
+            },
+          },
+        },
+      } as unknown as Parameters<typeof tx.article.findFirst>[0])) as
+        | (RawArticle & {
+            versions?: {
+              id: string;
+              checkRuns?: { id: string }[];
+            }[];
+          })
+        | null;
+
+      if (!article) {
+        return false;
+      }
+
+      const versionIds = (article.versions ?? []).map((version) => version.id);
+      const checkRunIds = (article.versions ?? []).flatMap((version) =>
+        (version.checkRuns ?? []).map((run) => run.id)
+      );
+
+      if (checkRunIds.length > 0) {
+        await tx.finding.deleteMany({
+          where: { runId: { in: checkRunIds } },
+        } as unknown as Parameters<typeof tx.finding.deleteMany>[0]);
+        await tx.checkRun.deleteMany({
+          where: { id: { in: checkRunIds } },
+        } as unknown as Parameters<typeof tx.checkRun.deleteMany>[0]);
+      }
+
+      if (versionIds.length > 0) {
+        await tx.articleVersion.deleteMany({
+          where: { id: { in: versionIds } },
+        } as unknown as Parameters<typeof tx.articleVersion.deleteMany>[0]);
+      }
+
+      await tx.article.delete({
+        where: { id: articleId },
+      } as unknown as Parameters<typeof tx.article.delete>[0]);
 
       return true;
     });
@@ -1089,6 +1144,15 @@ class MemoryStorage implements StorageAdapter {
     }
     return false;
   }
+
+  async deleteArticle(articleId: string, authorId: string): Promise<boolean> {
+    const article = this.articles.get(articleId);
+    if (!article || article.authorId !== authorId) {
+      return false;
+    }
+    this.articles.delete(articleId);
+    return true;
+  }
 }
 
 function isPrismaInitializationError(error: unknown) {
@@ -1203,6 +1267,20 @@ export class StorageManager {
     }
 
     return this.memoryAdapter.deleteVersion(versionId, authorId);
+  }
+
+  async deleteArticle(articleId: string, authorId: string) {
+    const dbResult = await this.tryPrisma(() =>
+      this.prismaAdapter.deleteArticle(articleId, authorId)
+    );
+    if (dbResult !== null) {
+      if (dbResult) {
+        await this.memoryAdapter.deleteArticle(articleId, authorId);
+      }
+      return dbResult;
+    }
+
+    return this.memoryAdapter.deleteArticle(articleId, authorId);
   }
 }
 

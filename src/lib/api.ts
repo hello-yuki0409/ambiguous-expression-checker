@@ -227,6 +227,13 @@ export async function deleteVersion(versionId: string) {
   );
 }
 
+export async function deleteArticle(articleId: string) {
+  await request<unknown>(
+    `/api/versions?articleId=${encodeURIComponent(articleId)}`,
+    { method: "DELETE" }
+  );
+}
+
 export async function fetchDashboard() {
   const data = await request<DashboardResponse>("/api/dashboard");
   return data;

@@ -7,12 +7,14 @@ import {
   fetchArticleDetail,
   fetchVersionDetail,
   deleteVersion,
+  deleteArticle,
   type ArticleDetail,
   type ArticleSummary,
   type VersionDetail,
   type VersionSummary,
 } from "@/lib/api";
 import { VersionDeleteDialog } from "@/components/organisms/history/VersionDeleteDialog";
+import { ArticleDeleteDialog } from "@/components/organisms/history/ArticleDeleteDialog";
 
 function formatDateTime(value: string) {
   const date = new Date(value);
@@ -100,6 +102,12 @@ export default function History() {
   const [deleteLoadingId, setDeleteLoadingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<VersionSummary | null>(null);
+  const [articleDeleteTarget, setArticleDeleteTarget] =
+    useState<ArticleSummary | null>(null);
+  const [articleDeleteLoading, setArticleDeleteLoading] = useState(false);
+  const [articleDeleteError, setArticleDeleteError] = useState<string | null>(
+    null
+  );
 
   const selectedSummaries = useMemo(() => {
     if (!article) return [] as VersionSummary[];
@@ -108,10 +116,11 @@ export default function History() {
       .filter((v): v is VersionSummary => Boolean(v));
   }, [article, selectedVersions]);
 
-  const loadSummaries = async () => {
+  const loadSummaries = async (preferredId?: string | null) => {
     setLoading(true);
     setSummaryError(null);
     setDeleteError(null);
+    setArticleDeleteError(null);
     try {
       const list = await fetchArticlesSummary();
       setSummaries(list);
@@ -119,10 +128,13 @@ export default function History() {
         setSelectedArticleId(null);
         return;
       }
-      const exists = list.some((item) => item.id === selectedArticleId);
-      if (!exists) {
-        setSelectedArticleId(list[0].id);
-      }
+      const targetId = preferredId ?? selectedArticleId;
+      const nextSelected = targetId
+        ? list.some((item) => item.id === targetId)
+          ? targetId
+          : list[0].id
+        : list[0].id;
+      setSelectedArticleId(nextSelected ?? null);
     } catch (err) {
       setSummaryError((err as Error).message);
     } finally {
@@ -259,6 +271,37 @@ export default function History() {
     }
   };
 
+  const openArticleDeleteDialog = (
+    articleSummary: ArticleSummary,
+    event?: React.MouseEvent
+  ) => {
+    event?.stopPropagation();
+    setArticleDeleteError(null);
+    setArticleDeleteTarget(articleSummary);
+  };
+
+  const performArticleDelete = async () => {
+    if (!articleDeleteTarget) return;
+    const articleId = articleDeleteTarget.id;
+
+    setArticleDeleteError(null);
+    setArticleDeleteLoading(true);
+    try {
+      await deleteArticle(articleId);
+      setArticle(null);
+      setSelectedVersions([]);
+      setDiff(null);
+      setDiffError(null);
+      setDeleteTarget(null);
+      await loadSummaries(null);
+      setArticleDeleteTarget(null);
+    } catch (err) {
+      setArticleDeleteError((err as Error).message || "削除に失敗しました");
+    } finally {
+      setArticleDeleteLoading(false);
+    }
+  };
+
   return (
     <>
       <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
@@ -272,7 +315,7 @@ export default function History() {
                 variant="outline"
                 size="sm"
                 className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                onClick={loadSummaries}
+                onClick={() => loadSummaries(selectedArticleId)}
                 disabled={loading}
               >
                 {loading ? "更新中..." : "再読み込み"}
@@ -294,22 +337,24 @@ export default function History() {
                 const previousRun = item.previous?.checkRun;
                 const trend = computeTrend(latestRun, previousRun);
                 const isActive = selectedArticleId === item.id;
+                const isDeletingArticle =
+                  articleDeleteLoading && articleDeleteTarget?.id === item.id;
                 return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`w-full rounded-xl border p-4 text-left transition-all ${
-                      isActive
-                        ? "border-emerald-400 bg-gradient-to-br from-emerald-50 to-white shadow-md"
-                        : "border-transparent bg-white/70 hover:border-emerald-200 hover:bg-white"
-                    }`}
-                    onClick={() => setSelectedArticleId(item.id)}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-slate-900">
-                          {item.title || "無題の記事"}
-                        </div>
+                  <div key={item.id} className="relative">
+                    <button
+                      type="button"
+                      className={`w-full rounded-xl border p-4 text-left transition-all ${
+                        isActive
+                          ? "border-emerald-400 bg-gradient-to-br from-emerald-50 to-white shadow-md"
+                          : "border-transparent bg-white/70 hover:border-emerald-200 hover:bg-white"
+                      }`}
+                      onClick={() => setSelectedArticleId(item.id)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {item.title || "無題の記事"}
+                          </div>
                         <div className="mt-1 text-[11px] text-muted-foreground">
                           最終更新: {formatDateTime(item.updatedAt)}
                         </div>
@@ -359,7 +404,17 @@ export default function History() {
                         </div>
                       </div>
                     )}
-                  </button>
+                    </button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="absolute right-4 top-4 border-red-200 text-red-600 hover:bg-red-50"
+                      onClick={(event) => openArticleDeleteDialog(item, event)}
+                      disabled={isDeletingArticle}
+                    >
+                      {isDeletingArticle ? "削除中..." : "記事削除"}
+                    </Button>
+                  </div>
                 );
               })}
             </div>
@@ -604,6 +659,20 @@ export default function History() {
           </section>
         </div>
       </div>
+
+      <ArticleDeleteDialog
+        open={Boolean(articleDeleteTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setArticleDeleteTarget(null);
+            setArticleDeleteError(null);
+          }
+        }}
+        target={articleDeleteTarget}
+        onConfirm={performArticleDelete}
+        loading={articleDeleteLoading}
+        errorMessage={articleDeleteError}
+      />
 
       <VersionDeleteDialog
         open={Boolean(deleteTarget)}

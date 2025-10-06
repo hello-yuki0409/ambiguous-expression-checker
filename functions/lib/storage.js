@@ -405,6 +405,44 @@ class PrismaStorage {
             return true;
         });
     }
+    async deleteArticle(articleId, authorId) {
+        return db_1.prisma.$transaction(async (tx) => {
+            const article = (await tx.article.findFirst({
+                where: { id: articleId, authorId },
+                select: {
+                    id: true,
+                    versions: {
+                        select: {
+                            id: true,
+                            checkRuns: { select: { id: true } },
+                        },
+                    },
+                },
+            }));
+            if (!article) {
+                return false;
+            }
+            const versionIds = (article.versions ?? []).map((version) => version.id);
+            const checkRunIds = (article.versions ?? []).flatMap((version) => (version.checkRuns ?? []).map((run) => run.id));
+            if (checkRunIds.length > 0) {
+                await tx.finding.deleteMany({
+                    where: { runId: { in: checkRunIds } },
+                });
+                await tx.checkRun.deleteMany({
+                    where: { id: { in: checkRunIds } },
+                });
+            }
+            if (versionIds.length > 0) {
+                await tx.articleVersion.deleteMany({
+                    where: { id: { in: versionIds } },
+                });
+            }
+            await tx.article.delete({
+                where: { id: articleId },
+            });
+            return true;
+        });
+    }
 }
 class MemoryStorage {
     constructor() {
@@ -723,6 +761,14 @@ class MemoryStorage {
         }
         return false;
     }
+    async deleteArticle(articleId, authorId) {
+        const article = this.articles.get(articleId);
+        if (!article || article.authorId !== authorId) {
+            return false;
+        }
+        this.articles.delete(articleId);
+        return true;
+    }
 }
 function isPrismaInitializationError(error) {
     if (!error)
@@ -810,6 +856,16 @@ class StorageManager {
             return dbResult;
         }
         return this.memoryAdapter.deleteVersion(versionId, authorId);
+    }
+    async deleteArticle(articleId, authorId) {
+        const dbResult = await this.tryPrisma(() => this.prismaAdapter.deleteArticle(articleId, authorId));
+        if (dbResult !== null) {
+            if (dbResult) {
+                await this.memoryAdapter.deleteArticle(articleId, authorId);
+            }
+            return dbResult;
+        }
+        return this.memoryAdapter.deleteArticle(articleId, authorId);
     }
 }
 exports.StorageManager = StorageManager;
