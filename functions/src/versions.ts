@@ -275,6 +275,8 @@ export const versions = onRequest(
       }
 
       if (req.method === "DELETE") {
+        const articleId =
+          typeof req.query.articleId === "string" ? req.query.articleId : null;
         const versionId = extractVersionId(req);
         if (process.env.NODE_ENV !== "production") {
           console.log(
@@ -283,10 +285,25 @@ export const versions = onRequest(
               originalUrl: req.originalUrl,
               url: req.url,
               path: req.path,
+              articleId,
               versionId,
             })
           );
         }
+
+        if (articleId) {
+          const deletedArticle = await storageManager.deleteArticle(
+            articleId,
+            uid
+          );
+          if (!deletedArticle) {
+            res.status(404).json({ error: "article_not_found" });
+            return;
+          }
+          res.status(204).end();
+          return;
+        }
+
         if (!versionId) {
           res.status(400).json({ error: "version_id_required" });
           return;

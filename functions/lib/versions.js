@@ -201,14 +201,25 @@ exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, as
             return;
         }
         if (req.method === "DELETE") {
+            const articleId = typeof req.query.articleId === "string" ? req.query.articleId : null;
             const versionId = extractVersionId(req);
             if (process.env.NODE_ENV !== "production") {
                 console.log("[versions] delete request", JSON.stringify({
                     originalUrl: req.originalUrl,
                     url: req.url,
                     path: req.path,
+                    articleId,
                     versionId,
                 }));
+            }
+            if (articleId) {
+                const deletedArticle = await storage_1.storageManager.deleteArticle(articleId, uid);
+                if (!deletedArticle) {
+                    res.status(404).json({ error: "article_not_found" });
+                    return;
+                }
+                res.status(204).end();
+                return;
             }
             if (!versionId) {
                 res.status(400).json({ error: "version_id_required" });
