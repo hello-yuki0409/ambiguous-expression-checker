@@ -15,27 +15,8 @@ import {
 } from "@/lib/api";
 import { VersionDeleteDialog } from "@/components/organisms/history/VersionDeleteDialog";
 import { ArticleDeleteDialog } from "@/components/organisms/history/ArticleDeleteDialog";
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { hour12: false });
-}
-
-function formatScore(score: number | null | undefined) {
-  if (score === null || score === undefined) return "-";
-  return score.toFixed(2);
-}
-
-function formatPercent(value: number | null | undefined, fractionDigits = 0) {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "―";
-  }
-  const rounded = value.toFixed(fractionDigits);
-  const numeric = Number(rounded);
-  const sign = numeric > 0 ? "+" : "";
-  return `${sign}${rounded}%`;
-}
+import { ArticleSummaryCard } from "@/components/molecules/history/ArticleSummaryCard";
+import { formatDateTime, formatScore } from "@/lib/formatters";
 
 type Trend = {
   countDiff: number;
@@ -56,12 +37,6 @@ function computeTrend(
   const scorePercent =
     previous.aimaiScore !== 0 ? (scoreDiff / previous.aimaiScore) * 100 : null;
   return { countDiff, countPercent, scoreDiff, scorePercent } satisfies Trend;
-}
-
-function trendClass(value: number) {
-  if (value < 0) return "text-emerald-600";
-  if (value > 0) return "text-red-600";
-  return "text-muted-foreground";
 }
 
 function chipClass(isActive: boolean) {
@@ -340,81 +315,17 @@ export default function History() {
                 const isDeletingArticle =
                   articleDeleteLoading && articleDeleteTarget?.id === item.id;
                 return (
-                  <div key={item.id} className="relative">
-                    <button
-                      type="button"
-                      className={`w-full rounded-xl border p-4 text-left transition-all ${
-                        isActive
-                          ? "border-emerald-400 bg-gradient-to-br from-emerald-50 to-white shadow-md"
-                          : "border-transparent bg-white/70 hover:border-emerald-200 hover:bg-white"
-                      }`}
-                      onClick={() => setSelectedArticleId(item.id)}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-slate-900">
-                            {item.title || "無題の記事"}
-                          </div>
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          最終更新: {formatDateTime(item.updatedAt)}
-                        </div>
-                      </div>
-                      <span className={chipClass(isActive)}>
-                        v{(item.latest?.index ?? 0) + 1}
-                      </span>
-                    </div>
-                    {latestRun && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] font-mono text-slate-600">
-                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">
-                          <div className="opacity-80">曖昧度スコア</div>
-                          <div className="text-sm">
-                            {formatScore(latestRun.aimaiScore)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-emerald-50 px-3 py-2 text-emerald-700">
-                          <div className="opacity-80">曖昧件数</div>
-                          <div className="text-sm">{latestRun.totalCount}</div>
-                        </div>
-                      </div>
-                    )}
-                    {trend && previousRun && latestRun && (
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${trendClass(
-                            trend.countDiff
-                          )}`}
-                        >
-                          <div className="opacity-70">件数</div>
-                          <div className="font-mono">
-                            {previousRun.totalCount} → {latestRun.totalCount}
-                          </div>
-                          <div>{formatPercent(trend.countPercent)}</div>
-                        </div>
-                        <div
-                          className={`rounded-lg border px-3 py-2 ${trendClass(
-                            trend.scoreDiff
-                          )}`}
-                        >
-                          <div className="opacity-70">スコア</div>
-                          <div className="font-mono">
-                            {formatScore(previousRun.aimaiScore)} →{" "}
-                            {formatScore(latestRun.aimaiScore)}
-                          </div>
-                          <div>{formatPercent(trend.scorePercent, 1)}</div>
-                        </div>
-                      </div>
-                    )}
-                    </button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="absolute right-4 top-4 border-red-200 text-red-600 hover:bg-red-50"
-                      onClick={(event) => openArticleDeleteDialog(item, event)}
-                      disabled={isDeletingArticle}
-                    >
-                      {isDeletingArticle ? "削除中..." : "記事削除"}
-                    </Button>
-                  </div>
+                  <ArticleSummaryCard
+                    key={item.id}
+                    article={item}
+                    isActive={isActive}
+                    latestRun={latestRun}
+                    previousRun={previousRun}
+                    trend={trend}
+                    onSelect={() => setSelectedArticleId(item.id)}
+                    onDelete={() => openArticleDeleteDialog(item)}
+                    deleting={isDeletingArticle}
+                  />
                 );
               })}
             </div>
