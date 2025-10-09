@@ -1,4 +1,9 @@
 import type { DashboardFrequentPhraseEntry } from "@/lib/api";
+import { formatDateTime } from "@/lib/formatters";
+import {
+  DashboardEmptyState,
+  DashboardSectionCard,
+} from "@/components/molecules/dashboard/DashboardSectionCard";
 
 const CATEGORY_LABELS: Record<string, string> = {
   HEDGING: "推量・断定回避",
@@ -16,12 +21,6 @@ const CATEGORY_BADGES: Record<string, string> = {
   OTHER: "bg-slate-100 text-slate-700",
 };
 
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { hour12: false });
-}
-
 function formatSeverity(value: number) {
   if (!Number.isFinite(value)) return "-";
   return value.toFixed(1);
@@ -29,20 +28,15 @@ function formatSeverity(value: number) {
 
 export function FrequentPhrasesSection({ entries }: { entries: DashboardFrequentPhraseEntry[] }) {
   if (entries.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
-        頻出している曖昧表現はまだありません。
-      </div>
-    );
+    return <DashboardEmptyState message="頻出している曖昧表現はまだありません。" />;
   }
 
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-emerald-700">頻出曖昧語 TOP10</h3>
-        <span className="text-xs text-muted-foreground">（直近の保存から集計）</span>
-      </div>
-      <div className="mt-4 overflow-x-auto">
+    <DashboardSectionCard
+      title="頻出曖昧語 TOP10"
+      subtitle="（直近の保存から集計）"
+      contentClassName="overflow-x-auto"
+    >
         <table className="min-w-full text-left text-sm">
           <thead>
             <tr className="text-xs uppercase text-muted-foreground">
@@ -76,12 +70,13 @@ export function FrequentPhrasesSection({ entries }: { entries: DashboardFrequent
                 </td>
                 <td className="px-3 py-2 text-right font-mono text-sm">{entry.totalCount}</td>
                 <td className="px-3 py-2 text-right font-mono text-sm">{formatSeverity(entry.severityAvg)}</td>
-                <td className="px-3 py-2 text-xs text-muted-foreground">{formatDate(entry.lastFoundAt)}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">
+                  {formatDateTime(entry.lastFoundAt)}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-    </div>
+    </DashboardSectionCard>
   );
 }

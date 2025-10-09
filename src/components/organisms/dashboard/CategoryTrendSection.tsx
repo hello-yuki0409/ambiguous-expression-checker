@@ -9,6 +9,11 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { formatDateTime } from "@/lib/formatters";
+import {
+  DashboardEmptyState,
+  DashboardSectionCard,
+} from "@/components/molecules/dashboard/DashboardSectionCard";
 
 import type { TooltipContentProps } from "recharts/types/component/Tooltip";
 import type {
@@ -67,10 +72,7 @@ function TooltipContent(props: TooltipContentProps<ValueType, NameType>) {
     typeof buildChartData
   >[number];
 
-  const createdAt = new Date(String(dataPoint.createdAt)).toLocaleString(
-    undefined,
-    { hour12: false }
-  );
+  const createdAt = formatDateTime(String(dataPoint.createdAt));
 
   return (
     <div className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs shadow-sm">
@@ -97,26 +99,17 @@ export function CategoryTrendSection({
   entries: DashboardCategoryTrendEntry[];
 }) {
   if (entries.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
-        カテゴリ別の件数はまだありません。
-      </div>
-    );
+    return <DashboardEmptyState message="カテゴリ別の件数はまだありません。" />;
   }
 
   const chartData = buildChartData(entries);
 
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-emerald-700">
-          カテゴリ別件数
-        </h3>
-        <span className="text-xs text-muted-foreground">
-          （直近 {entries.length} 件）
-        </span>
-      </div>
-      <div className="mt-4 h-72">
+    <DashboardSectionCard
+      title="カテゴリ別件数"
+      subtitle={`（直近 ${entries.length} 件）`}
+      contentClassName="h-72"
+    >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={chartData}
@@ -149,7 +142,6 @@ export function CategoryTrendSection({
             ))}
           </BarChart>
         </ResponsiveContainer>
-      </div>
-    </div>
+    </DashboardSectionCard>
   );
 }

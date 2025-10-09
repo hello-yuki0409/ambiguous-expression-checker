@@ -1,26 +1,11 @@
 import type { DashboardSummary } from "@/lib/api";
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, { hour12: false });
-}
-
-function formatScore(value: number | null | undefined) {
-  if (value === null || value === undefined) return "-";
-  return value.toFixed(2);
-}
-
-function formatPercent(value: number | null | undefined) {
-  if (value === null || value === undefined || !Number.isFinite(value)) {
-    return "-";
-  }
-  const rounded = value.toFixed(1);
-  const numeric = Number(rounded);
-  const sign = numeric > 0 ? "+" : "";
-  return `${sign}${rounded}%`;
-}
+import {
+  formatDateTime,
+  formatPercent,
+  formatScore,
+} from "@/lib/formatters";
+import { MetricCard } from "@/components/molecules/dashboard/MetricCard";
+import { DashboardEmptyState } from "@/components/molecules/dashboard/DashboardSectionCard";
 
 function diffTextClass(value: number | null | undefined) {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -31,43 +16,9 @@ function diffTextClass(value: number | null | undefined) {
   return "text-muted-foreground";
 }
 
-function MetricCard({
-  title,
-  body,
-  footer,
-  highlight = false,
-}: {
-  title: string;
-  body: React.ReactNode;
-  footer?: React.ReactNode;
-  highlight?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-5 shadow-sm transition ${
-        highlight
-          ? "border-emerald-300 bg-gradient-to-br from-emerald-100/70 via-white to-white"
-          : "border-emerald-100 bg-white/80"
-      }`}
-    >
-      <h3 className="text-sm font-semibold text-emerald-700">{title}</h3>
-      <div className="mt-3 space-y-1 text-sm text-slate-800">{body}</div>
-      {footer ? (
-        <div className="mt-4 border-t border-emerald-100 pt-3 text-xs text-muted-foreground">
-          {footer}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function SummarySection({ summary }: { summary: DashboardSummary }) {
   if (!summary.latest) {
-    return (
-      <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
-        まだ保存されたバージョンがありません。
-      </div>
-    );
+    return <DashboardEmptyState message="まだ保存されたバージョンがありません。" />;
   }
 
   const { latest, previous, diff } = summary;
@@ -86,7 +37,7 @@ export function SummarySection({ summary }: { summary: DashboardSummary }) {
             <p>文字数: {latest.charLength}</p>
           </>
         }
-        footer={`作成: ${formatDate(latest.createdAt)}`}
+        footer={`作成: ${formatDateTime(latest.createdAt)}`}
         highlight
       />
 
@@ -106,7 +57,7 @@ export function SummarySection({ summary }: { summary: DashboardSummary }) {
             <p className="text-sm text-muted-foreground">比較対象がありません</p>
           )
         }
-        footer={previous ? `作成: ${formatDate(previous.createdAt)}` : undefined}
+        footer={previous ? `作成: ${formatDateTime(previous.createdAt)}` : undefined}
       />
 
       <MetricCard
