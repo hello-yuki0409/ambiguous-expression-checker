@@ -1,5 +1,6 @@
 import type { ArticleSummary, CheckRunSummary } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { StatusChip } from "@/components/atoms/StatusChip";
 import {
   formatDateTime,
   formatPercent,
@@ -23,14 +24,6 @@ type ArticleSummaryCardProps = {
   onDelete: () => void;
   deleting?: boolean;
 };
-
-function chipClass(isActive: boolean) {
-  return `px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
-    isActive
-      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-      : "border-transparent bg-muted/40 text-muted-foreground"
-  }`;
-}
 
 function trendClass(value: number) {
   if (value < 0) return "text-emerald-600";
@@ -68,9 +61,9 @@ export function ArticleSummaryCard({
               最終更新: {formatDateTime(article.updatedAt)}
             </div>
           </div>
-          <span className={chipClass(isActive)}>
+          <StatusChip active={isActive}>
             v{(article.latest?.index ?? 0) + 1}
-          </span>
+          </StatusChip>
         </div>
 
         {latestRun && (

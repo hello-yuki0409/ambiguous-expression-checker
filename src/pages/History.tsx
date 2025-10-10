@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DiffEditor } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { Button } from "@/components/ui/button";
+import { StatusChip } from "@/components/atoms/StatusChip";
 import {
   fetchArticlesSummary,
   fetchArticleDetail,
@@ -37,14 +38,6 @@ function computeTrend(
   const scorePercent =
     previous.aimaiScore !== 0 ? (scoreDiff / previous.aimaiScore) * 100 : null;
   return { countDiff, countPercent, scoreDiff, scorePercent } satisfies Trend;
-}
-
-function chipClass(isActive: boolean) {
-  return `px-3 py-1 rounded-full border text-xs font-medium transition-colors ${
-    isActive
-      ? "border-emerald-500 bg-emerald-50 text-emerald-700"
-      : "border-transparent bg-muted/40 text-muted-foreground"
-  }`;
 }
 
 // DiffEditor の自動リサイズがうまく働かないことがあるので、マウント時に wordWrap を設定し直す
@@ -386,21 +379,16 @@ export default function History() {
                       バージョン履歴
                     </h3>
                     <div className="flex items-center gap-2">
-                      <span
-                        className={chipClass(selectedVersions.length === 0)}
-                      >
+                      {/* 選択状態のラベルは視覚的統一感を保つために StatusChip で共通化 */}
+                      <StatusChip active={selectedVersions.length === 0}>
                         未選択
-                      </span>
-                      <span
-                        className={chipClass(selectedVersions.length === 1)}
-                      >
+                      </StatusChip>
+                      <StatusChip active={selectedVersions.length === 1}>
                         1 件
-                      </span>
-                      <span
-                        className={chipClass(selectedVersions.length === 2)}
-                      >
+                      </StatusChip>
+                      <StatusChip active={selectedVersions.length === 2}>
                         2 件
-                      </span>
+                      </StatusChip>
                     </div>
                   </div>
                   {deleteError && !deleteTarget && (
