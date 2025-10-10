@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { type Finding } from "@/lib/detection";
+import { FindingsListItem } from "@/components/molecules/history/FindingsListItem";
 
 type SortMode = "order" | "category" | "frequency";
 
@@ -7,14 +8,6 @@ type Props = {
   findings: Finding[];
   onJump?: (offset: number) => void;
   onSelect?: (f: Finding) => void; // 候補モーダルを開く用
-};
-
-const CATEGORY_LABELS: Record<Finding["category"], string> = {
-  HEDGING: "推量・断定回避",
-  VAGUE: "ぼかし",
-  QUANTITY: "数量曖昧",
-  RESPONSIBILITY: "責任回避",
-  OTHER: "その他",
 };
 
 export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
@@ -66,33 +59,14 @@ export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
         </select>
       </div>
 
-      {sorted.map((f, i) => (
-        <div
-          key={`${f.start}-${i}`}
-          className="w-full p-2 rounded-md border hover:bg-muted/40 transition flex items-center justify-between gap-2"
-        >
-          <button
-            className="text-left flex-1"
-            onClick={() => onJump?.(f.start)}
-            title={f.reason ?? "曖昧な表現"}
-          >
-            <div className="flex items-center gap-2">
-              <span
-                className={`inline-block w-2 h-2 rounded-full sev-${f.severity}`}
-              />
-              <span className="font-mono text-[11px] opacity-70">
-                [{CATEGORY_LABELS[f.category] ?? f.category}]
-              </span>
-              <span className="truncate">{f.text}</span>
-            </div>
-          </button>
-          <button
-            className="text-xs px-2 py-1 border rounded hover:bg-muted"
-            onClick={() => onSelect?.(f)} // ここで候補モーダルを開く
-          >
-            候補
-          </button>
-        </div>
+      {sorted.map((f, index) => (
+        <FindingsListItem
+          key={`${f.start}-${index}`}
+          finding={f}
+          index={index}
+          onJump={onJump}
+          onSelect={onSelect}
+        />
       ))}
     </div>
   );
