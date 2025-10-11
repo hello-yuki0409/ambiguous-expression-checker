@@ -121,10 +121,10 @@ Firebase Authentication の Email/Password プロバイダを有効化し、テ�
 | ステップ           | 実装ポイント                                                                                     | 補足                                                                                                         |
 | ------------------ | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | 曖昧表現の検出     | `src/lib/detection.ts` が `src/lib/patterns.ts` を用いて正規表現検出。ゼロ幅対策で `lastIndex++` | Monaco Editor 上で severity / category に応じた装飾を付与                                                    |
-| 言い換え候補生成   | `/api/rewrite` → `functions/src/rewrite.ts`                                                      | カテゴリ指針と周辺 120 文字の文脈を Responses API に渡し、JSON Schema で敬体・断定的な候補と理由を取得       |
-| バージョン保存     | `/api/versions` POST → `functions/src/versions.ts`                                               | Firebase UID + authorLabel でスコープし、`ArticleVersion` / `CheckRun` / `Finding` を Supabase に保存        |
+| 言い換え候補生成   | `/api/rewrite` -> `functions/src/rewrite.ts`                                                      | カテゴリ指針と周辺 120 文字の文脈を Responses API に渡し、JSON Schema で敬体・断定的な候補と理由を取得       |
+| バージョン保存     | `/api/versions` POST -> `functions/src/versions.ts`                                               | Firebase UID + authorLabel でスコープし、`ArticleVersion` / `CheckRun` / `Finding` を Supabase に保存        |
 | 履歴 / Diff 表示   | `src/pages/History.tsx`                                                                          | Monaco DiffEditor を常時マウントし、左右とも word wrap とモデル保持で UX を改善                              |
-| ダッシュボード集計 | `/api/dashboard` → `functions/src/dashboard.ts`                                                  | 最新 2 件比較・スコア推移・カテゴリ件数・頻出語を返却。Prisma 不通時はメモリスナップショットにフォールバック |
+| ダッシュボード集計 | `/api/dashboard` -> `functions/src/dashboard.ts`                                                  | 最新 2 件比較・スコア推移・カテゴリ件数・頻出語を返却。Prisma 不通時はメモリスナップショットにフォールバック |
 
 ## 環境変数リファレンス
 
@@ -175,7 +175,7 @@ Firebase Authentication の Email/Password プロバイダを有効化し、テ�
 | `POST /api/rewrite`        | OpenAI Responses API を呼び出し、敬体で断定的な言い換えと理由を返却                      | `functions/src/rewrite.ts`   |
 | `GET /api/versions`        | 記事サマリ／記事詳細／バージョン詳細を返却（`take` / `skip`対応）                        | `functions/src/versions.ts`  |
 | `POST /api/versions`       | 検出結果を保存し、`CheckRun`・`Finding` を Supabase に紐付け                             | `functions/src/versions.ts`  |
-| `DELETE /api/versions/:id` | `findings → check_runs → article_versions` の順で削除し整合性を保つ                      | `functions/src/versions.ts`  |
+| `DELETE /api/versions/:id` | `findings -> check_runs -> article_versions` の順で削除し整合性を保つ                      | `functions/src/versions.ts`  |
 | `GET /api/dashboard`       | 最新 2 件比較・スコア推移・カテゴリ件数・頻出語を集計。Prisma 不通時はメモリデータを利用 | `functions/src/dashboard.ts` |
 
 ※ 全エンドポイントで Firebase ID トークン（`Authorization: Bearer ...`）が必須です。
@@ -221,7 +221,7 @@ Firebase Authentication の Email/Password プロバイダを有効化し、テ�
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Missing Firebase configuration` | `./.env.local` の `VITE_FIREBASE_*` を確認し Vite を再起動。Functions 用 `.env` と取り違えていないかチェック                                                                                                   |
 | `/api/versions` が 404           | ブラウザ拡張がリクエストを書き換えている可能性。シークレットウィンドウで再試行し Authorization ヘッダーを確認                                                                                                  |
-| ダッシュボードが 500             | Supabase 接続が落ちている可能性。`DATABASE_URL`（6543）と `DIRECT_DATABASE_URL`（5432）を再確認し、`npm run build:functions` → emulator 再起動。ログに "prisma unavailable" が出ればメモリフォールバックが動作 |
+| ダッシュボードが 500             | Supabase 接続が落ちている可能性。`DATABASE_URL`（6543）と `DIRECT_DATABASE_URL`（5432）を再確認し、`npm run build:functions` -> emulator 再起動。ログに "prisma unavailable" が出ればメモリフォールバックが動作 |
 | DiffEditor のモデル破棄エラー    | 常時マウント＋モデル保持で対策済み。解消しない場合はブラウザ再読み込み、それでも NG なら Issue を作成                                                                                                          |
 | OpenAI 429 / 401                 | レート制限・権限を確認。必要に応じて `OPENAI_REWRITE_MODEL` を軽量モデルへ戻す。Functions を再ビルド                                                                                                           |
 
