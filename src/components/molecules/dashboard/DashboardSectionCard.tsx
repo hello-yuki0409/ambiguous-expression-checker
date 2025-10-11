@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
+import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 
 type DashboardSectionCardProps = {
   title: string;
@@ -28,9 +29,5 @@ export function DashboardSectionCard({
 }
 
 export function DashboardEmptyState({ message }: { message: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
-      {message}
-    </div>
-  );
+  return <EmptyStateMessage>{message}</EmptyStateMessage>;
 }
