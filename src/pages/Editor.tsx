@@ -61,7 +61,6 @@ export default function Editor() {
   const [history, setHistory] = useState<RunHistory[]>(() => loadHistory());
   const [openDelete, setOpenDelete] = useState(false);
 
-  // 👇 Phase3 用 state
   const [selected, setSelected] = useState<Finding | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -285,7 +284,9 @@ export default function Editor() {
         >
           <div className="space-y-3">
             <div>
-              <label className="text-xs font-medium text-emerald-700">記事タイトル</label>
+              <label className="text-xs font-medium text-emerald-700">
+                記事タイトル
+              </label>
               <input
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
@@ -293,12 +294,17 @@ export default function Editor() {
                 className="mt-1 w-full rounded-xl border border-emerald-100 bg-white px-4 py-2 text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
               {articleId && (
-                <p className="mt-1 text-[11px] text-muted-foreground">Article ID: {articleId}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Article ID: {articleId}
+                </p>
               )}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="text-xs text-muted-foreground">
-                検出時間 <span className="font-mono text-sm text-emerald-700">{ms}ms</span>
+                検出時間{" "}
+                <span className="font-mono text-sm text-emerald-700">
+                  {ms}ms
+                </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -308,7 +314,10 @@ export default function Editor() {
                 >
                   クリア
                 </Button>
-                <Button onClick={runCheck} className="bg-emerald-500 text-white hover:bg-emerald-600">
+                <Button
+                  onClick={runCheck}
+                  className="bg-emerald-500 text-white hover:bg-emerald-600"
+                >
                   チェック
                 </Button>
                 <Button
@@ -374,7 +383,9 @@ export default function Editor() {
         <aside>
           <SurfaceCard className="bg-white/80 p-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-emerald-700">直近履歴</h3>
+              <h3 className="text-sm font-semibold text-emerald-700">
+                直近履歴
+              </h3>
               <Button
                 variant="outline"
                 size="sm"
@@ -402,7 +413,9 @@ export default function Editor() {
             />
 
             {history.length === 0 ? (
-              <p className="mt-3 text-xs text-muted-foreground">まだ履歴はありません</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                まだ履歴はありません
+              </p>
             ) : (
               <ul className="mt-3 space-y-2 text-xs">
                 {history.map((h, i) => (
@@ -411,7 +424,9 @@ export default function Editor() {
                     className="flex items-center justify-between gap-2 rounded-xl border border-emerald-100 bg-emerald-50/50 px-3 py-2"
                   >
                     <span className="font-medium text-emerald-700">
-                      {new Date(h.ts).toLocaleString(undefined, { hour12: false })}
+                      {new Date(h.ts).toLocaleString(undefined, {
+                        hour12: false,
+                      })}
                     </span>
                     <span className="font-mono text-emerald-800">
                       {h.count}件 / {h.length}字 / {h.ms}ms
@@ -428,18 +443,20 @@ export default function Editor() {
           </SurfaceCard>
         </aside>
 
-      {/* 候補モーダル */}
-      <RewriteDialog
-        open={!!selected}
-        onOpenChange={(v) => !v && setSelected(null)}
-        original={selected?.text ?? ""}
-        context={
-          selected ? buildContextSnippet(content, selected.start, selected.end) : content
-        }
-        category={selected?.category}
-        style="敬体"
-        onReplace={replaceSelected}
-      />
+        {/* 候補モーダル */}
+        <RewriteDialog
+          open={!!selected}
+          onOpenChange={(v) => !v && setSelected(null)}
+          original={selected?.text ?? ""}
+          context={
+            selected
+              ? buildContextSnippet(content, selected.start, selected.end)
+              : content
+          }
+          category={selected?.category}
+          style="敬体"
+          onReplace={replaceSelected}
+        />
       </div>
     </div>
   );
