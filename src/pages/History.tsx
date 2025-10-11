@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/atoms/StatusChip";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { MetricPill } from "@/components/atoms/MetricPill";
+import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 import {
   fetchArticlesSummary,
   fetchArticleDetail,
@@ -332,9 +333,9 @@ export default function History() {
 
           <section className="space-y-6">
             {!selectedArticleId ? (
-              <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/60 p-6 text-center text-sm text-muted-foreground">
+              <EmptyStateMessage className="bg-white/60 text-center">
                 記事を選択すると履歴が表示されます。
-              </div>
+              </EmptyStateMessage>
             ) : detailLoading ? (
               <div className="rounded-2xl border border-emerald-100 bg-white/70 p-6 text-center text-sm text-muted-foreground">
                 読み込み中...
@@ -403,9 +404,9 @@ export default function History() {
                     </p>
                   )}
                   {article.versions.length === 0 ? (
-                    <p className="rounded-xl border border-emerald-100 bg-white p-4 text-sm text-muted-foreground">
+                    <EmptyStateMessage className="rounded-xl border border-emerald-100 bg-white px-4 py-3">
                       まだバージョンがありません。
-                    </p>
+                    </EmptyStateMessage>
                   ) : (
                     <div className="grid gap-3">
                       {article.versions.map((version) => {
@@ -520,9 +521,9 @@ export default function History() {
                     </div>
                   )}
                   {selectedVersions.length < 2 && (
-                    <p className="mt-3 rounded-lg border border-dashed border-emerald-200 bg-white px-4 py-3 text-sm text-muted-foreground">
+                    <EmptyStateMessage className="mt-3 rounded-lg bg-white px-4 py-3">
                       Diff を表示するには 2 つのバージョンを選択してください。
-                    </p>
+                    </EmptyStateMessage>
                   )}
                   {diffError && (
                     <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">

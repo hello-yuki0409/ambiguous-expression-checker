@@ -6,6 +6,8 @@ import { ScoreTrendSection } from "@/components/organisms/dashboard/ScoreTrendSe
 import { CategoryTrendSection } from "@/components/organisms/dashboard/CategoryTrendSection";
 import { FrequentPhrasesSection } from "@/components/organisms/dashboard/FrequentPhrasesSection";
 import { Button } from "@/components/ui/button";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
+import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -95,13 +97,13 @@ export default function Dashboard() {
             <div className="h-48 animate-pulse rounded-2xl bg-emerald-100/60" />
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+          <SurfaceCard className="border-red-200 bg-red-50 p-6 text-sm text-red-700 shadow-none">
             {error}
-          </div>
+          </SurfaceCard>
         ) : !data ? (
-          <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
+          <EmptyStateMessage>
             データを取得できませんでした。
-          </div>
+          </EmptyStateMessage>
         ) : (
           <div className="space-y-6">
             <SummarySection summary={data.summary} />
@@ -109,9 +111,9 @@ export default function Dashboard() {
             <CategoryTrendSection entries={data.categoryTrend} />
             <FrequentPhrasesSection entries={data.frequentPhrases} />
             {!hasContent ? (
-              <div className="rounded-2xl border border-dashed border-emerald-200 bg-white/70 p-6 text-sm text-muted-foreground">
+              <EmptyStateMessage>
                 記事を保存すると履歴が集計されます。
-              </div>
+              </EmptyStateMessage>
             ) : null}
           </div>
         )}

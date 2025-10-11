@@ -1,4 +1,5 @@
 import type { Finding } from "@/lib/detection";
+import { SeverityDot } from "@/components/atoms/SeverityDot";
 
 const CATEGORY_LABELS: Record<Finding["category"], string> = {
   HEDGING: "推量・断定回避",
@@ -32,9 +33,7 @@ export function FindingsListItem({
         title={finding.reason ?? "曖昧な表現"}
       >
         <div className="flex items-center gap-2">
-          <span
-            className={`inline-block h-2 w-2 rounded-full sev-${finding.severity}`}
-          />
+          <SeverityDot severity={finding.severity} />
           <span className="font-mono text-[11px] opacity-70">
             [{CATEGORY_LABELS[finding.category] ?? finding.category}]
           </span>
