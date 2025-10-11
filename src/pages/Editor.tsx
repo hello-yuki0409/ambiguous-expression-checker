@@ -6,6 +6,7 @@ import RewriteDialog from "@/components/RewriteDialog";
 import { detect, type Finding } from "@/lib/detection";
 import { defaultPatterns } from "@/lib/patterns";
 import { Button } from "@/components/ui/button";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import {
   loadHistory,
   pushHistory,
@@ -277,7 +278,11 @@ export default function Editor() {
   return (
     <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
       <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[minmax(0,1fr),320px]">
-        <section className="space-y-4 rounded-2xl border border-emerald-100 bg-white/70 p-6 shadow-sm backdrop-blur">
+        {/* カードレイアウトを SurfaceCard にまとめて視覚のズレを防ぐ */}
+        <SurfaceCard
+          as="section"
+          className="space-y-4 bg-white/70 p-6 backdrop-blur"
+        >
           <div className="space-y-3">
             <div>
               <label className="text-xs font-medium text-emerald-700">記事タイトル</label>
@@ -346,7 +351,7 @@ export default function Editor() {
               />
             </div>
 
-            <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+            <SurfaceCard className="bg-white/80 p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-emerald-700">
                   検出一覧（{findings.length}件）
@@ -362,12 +367,12 @@ export default function Editor() {
                   onSelect={(f) => setSelected(f)}
                 />
               </div>
-            </div>
+            </SurfaceCard>
           </div>
-        </section>
+        </SurfaceCard>
 
         <aside>
-          <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+          <SurfaceCard className="bg-white/80 p-5">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-emerald-700">直近履歴</h3>
               <Button
@@ -420,7 +425,7 @@ export default function Editor() {
                 ))}
               </ul>
             )}
-          </div>
+          </SurfaceCard>
         </aside>
 
       {/* 候補モーダル */}

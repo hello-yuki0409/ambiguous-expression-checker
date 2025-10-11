@@ -3,6 +3,8 @@ import { DiffEditor } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/atoms/StatusChip";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
+import { MetricPill } from "@/components/atoms/MetricPill";
 import {
   fetchArticlesSummary,
   fetchArticleDetail,
@@ -274,7 +276,11 @@ export default function History() {
     <>
       <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
         <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px,1fr]">
-          <section className="rounded-2xl border border-emerald-100 bg-white/80 p-4 shadow-sm backdrop-blur">
+          {/* カード枠のスタイルを共通化して見た目差異を防ぐ */}
+          <SurfaceCard
+            as="section"
+            className="bg-white/80 p-4 backdrop-blur"
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-emerald-700">
                 記事一覧
@@ -322,7 +328,7 @@ export default function History() {
                 );
               })}
             </div>
-          </section>
+          </SurfaceCard>
 
           <section className="space-y-6">
             {!selectedArticleId ? (
@@ -343,7 +349,7 @@ export default function History() {
               </div>
             ) : (
               <>
-                <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+                <SurfaceCard className="bg-white/80 p-5">
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div>
                       <h2 className="text-xl font-semibold text-slate-900">
@@ -355,23 +361,23 @@ export default function History() {
                       </p>
                     </div>
                     <div className="grid w-full max-w-sm grid-cols-2 gap-2 text-center text-xs">
-                      <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-700">
+                      <MetricPill className="rounded-xl p-3">
                         <div className="opacity-80">バージョン数</div>
                         <div className="text-lg font-semibold">
                           {article.versions.length}
                         </div>
-                      </div>
-                      <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-700">
+                      </MetricPill>
+                      <MetricPill className="rounded-xl p-3">
                         <div className="opacity-80">最新スコア</div>
                         <div className="text-lg font-semibold">
                           {formatScore(
                             article.versions[0]?.checkRun?.aimaiScore
                           )}
                         </div>
-                      </div>
+                      </MetricPill>
                     </div>
                   </div>
-                </div>
+                </SurfaceCard>
 
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
@@ -424,16 +430,16 @@ export default function History() {
                                 </div>
                               </div>
                               <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
-                                <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-700">
+                                <MetricPill>
                                   件数 {run?.totalCount ?? 0}
-                                </div>
-                                <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-700">
+                                </MetricPill>
+                                <MetricPill>
                                   スコア {formatScore(run?.aimaiScore)}
-                                </div>
+                                </MetricPill>
                                 {run && (
-                                  <div className="rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-700">
+                                  <MetricPill>
                                     文字数 {run.charLength}
-                                  </div>
+                                  </MetricPill>
                                 )}
                               </div>
                               <div className="flex items-center gap-2">
@@ -470,7 +476,7 @@ export default function History() {
                   )}
                 </div>
 
-                <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+                <SurfaceCard className="bg-white/80 p-5">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-sm font-semibold text-emerald-700">
                       Diff
@@ -552,7 +558,7 @@ export default function History() {
                       }}
                     />
                   </div>
-                </div>
+                </SurfaceCard>
               </>
             )}
           </section>
