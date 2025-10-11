@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 
 type DashboardSectionCardProps = {
   title: string;
@@ -14,7 +15,7 @@ export function DashboardSectionCard({
   contentClassName,
 }: DashboardSectionCardProps) {
   return (
-    <div className="rounded-2xl border border-emerald-100 bg-white/80 p-5 shadow-sm">
+    <SurfaceCard className="bg-white/80 p-5">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-emerald-700">{title}</h3>
         {subtitle ? (
@@ -22,7 +23,7 @@ export function DashboardSectionCard({
         ) : null}
       </div>
       <div className={`mt-4 ${contentClassName ?? ""}`}>{children}</div>
-    </div>
+    </SurfaceCard>
   );
 }
 
