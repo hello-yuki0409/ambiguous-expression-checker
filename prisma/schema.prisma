@@ -54,9 +54,6 @@ model users {
 /**
  * 新規に追加したいテーブルだけ（article_versions）
  */
-/**
- * Phase4 で利用するテーブル
- */
 
 enum AimaiCategory {
   HEDGING
