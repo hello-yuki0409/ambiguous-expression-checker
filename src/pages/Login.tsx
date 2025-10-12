@@ -8,8 +8,10 @@ import {
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-
-type Mode = "signIn" | "signUp";
+import {
+  AuthModeSwitcher,
+  type AuthMode,
+} from "@/components/molecules/auth/AuthModeSwitcher";
 
 type LocationState = {
   from?: {
@@ -18,7 +20,7 @@ type LocationState = {
 };
 
 export default function Login() {
-  const [mode, setMode] = useState<Mode>("signIn");
+  const [mode, setMode] = useState<AuthMode>("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authorLabel, setAuthorLabel] = useState("");
@@ -162,39 +164,14 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="mt-6 text-center text-sm">
-          {mode === "signUp" ? (
-            <>
-              既にアカウントをお持ちですか？
-              <Button
-                type="button"
-                variant="link"
-                className="ml-1 text-emerald-700"
-                onClick={() => {
-                  setMode("signIn");
-                  setError(null);
-                }}
-              >
-                ログインはこちら
-              </Button>
-            </>
-          ) : (
-            <>
-              アカウントをお持ちでない場合は
-              <Button
-                type="button"
-                variant="link"
-                className="ml-1 text-emerald-700"
-                onClick={() => {
-                  setMode("signUp");
-                  setError(null);
-                }}
-              >
-                新規登録
-              </Button>
-            </>
-          )}
-        </div>
+        <AuthModeSwitcher
+          mode={mode}
+          onSwitch={(nextMode) => {
+            setMode(nextMode);
+            setError(null);
+          }}
+          className="mt-6"
+        />
       </div>
     </div>
   );

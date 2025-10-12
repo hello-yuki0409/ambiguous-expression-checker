@@ -10,7 +10,7 @@ datasource db {
 }
 
 /**
- * 既存テーブル（触らない）
+ * 既存テーブルここから（触らない）
  */
 model skills {
   id         BigInt    @id @default(autoincrement())
@@ -52,6 +52,10 @@ model users {
 }
 
 /**
+ * 既存テーブルここまで（触らない）
+ */
+
+/**
  * 新規に追加したいテーブルだけ（article_versions）
  */
 
@@ -69,17 +73,17 @@ model User {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  articles    Article[]
+  articles Article[]
 }
 
 model Article {
-  id        String   @id @default(cuid())
-  authorId  String?
-  author    User?    @relation(fields: [authorId], references: [id])
-  title     String?
+  id          String   @id @default(cuid())
+  authorId    String?
+  author      User?    @relation(fields: [authorId], references: [id])
+  title       String?
   authorLabel String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   versions ArticleVersion[]
 }
@@ -95,8 +99,8 @@ model ArticleVersion {
 
   checkRuns CheckRun[]
 
-  @@index([createdAt], map: "article_versions_created_at_idx")
   @@unique([articleId, index], map: "article_versions_article_index_key")
+  @@index([createdAt], map: "article_versions_created_at_idx")
   @@map("article_versions")
 }
 
@@ -117,19 +121,24 @@ model CheckRun {
 }
 
 model Finding {
-  id          String        @id @default(cuid())
-  runId       String
-  run         CheckRun      @relation(fields: [runId], references: [id])
+  id    String   @id @default(cuid())
+  runId String
+  run   CheckRun @relation(fields: [runId], references: [id])
+
   start       Int
   end         Int
   matchedText String
   category    AimaiCategory
   severity    Int
   reason      String?
-  patternId   String?
-  createdAt   DateTime      @default(now())
+
+  patternId String?
+  pattern   AimaiPattern? @relation(fields: [patternId], references: [id])
+
+  createdAt DateTime @default(now())
 
   @@index([runId], map: "findings_run_id_idx")
+  @@index([patternId], map: "findings_pattern_id_idx")
   @@map("findings")
 }
 
@@ -144,6 +153,9 @@ model AimaiPattern {
   enabled     Boolean       @default(true)
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt
+
+  // 逆側
+  findings Finding[]
 
   @@map("aimai_patterns")
 }
