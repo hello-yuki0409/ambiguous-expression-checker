@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { type Finding } from "@/lib/detection";
 import { FindingsListItem } from "@/components/molecules/history/FindingsListItem";
-
-type SortMode = "order" | "category" | "frequency";
+import {
+  FindingsSortControl,
+  type FindingsSortMode,
+} from "@/components/molecules/findings/FindingsSortControl";
 
 type Props = {
   findings: Finding[];
@@ -11,9 +13,9 @@ type Props = {
 };
 
 export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
-  const [sort, setSort] = useState<SortMode>("order");
+  const [sort, setSort] = useState<FindingsSortMode>("order");
 
-  const sortFindings = (list: Finding[], mode: SortMode) => {
+  const sortFindings = (list: Finding[], mode: FindingsSortMode) => {
     if (mode === "order") return list;
 
     if (mode === "category") {
@@ -45,19 +47,11 @@ export default function FindingsPanel({ findings, onJump, onSelect }: Props) {
 
   return (
     <div className="space-y-2 text-sm">
-      <div className="flex items-center justify-between mb-1">
-        <div className="font-medium">一覧（{findings.length}件）</div>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortMode)}
-          className="border rounded-md px-2 py-1 text-xs"
-          aria-label="sort"
-        >
-          <option value="order">登場順</option>
-          <option value="category">カテゴリ</option>
-          <option value="frequency">頻度</option>
-        </select>
-      </div>
+      <FindingsSortControl
+        count={findings.length}
+        sort={sort}
+        onSortChange={setSort}
+      />
 
       {sorted.map((f, index) => (
         <FindingsListItem
