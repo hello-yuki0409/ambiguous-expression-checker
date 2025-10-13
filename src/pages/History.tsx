@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { DiffEditor } from "@monaco-editor/react";
 import type { editor as MonacoEditor } from "monaco-editor";
-import { Button } from "@/components/ui/button";
 import { StatusChip } from "@/components/atoms/StatusChip";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 import { MetricPill } from "@/components/atoms/MetricPill";
 import { VersionHistoryCard } from "@/components/molecules/history/VersionHistoryCard";
+import { HistoryArticleSidebar } from "@/components/organisms/history/HistoryArticleSidebar";
+import { HistoryDiffSection } from "@/components/organisms/history/HistoryDiffSection";
 import {
   fetchArticlesSummary,
   fetchArticleDetail,
@@ -20,29 +20,7 @@ import {
 } from "@/lib/api";
 import { VersionDeleteDialog } from "@/components/organisms/history/VersionDeleteDialog";
 import { ArticleDeleteDialog } from "@/components/organisms/history/ArticleDeleteDialog";
-import { ArticleSummaryCard } from "@/components/molecules/history/ArticleSummaryCard";
 import { formatDateTime, formatScore } from "@/lib/formatters";
-
-type Trend = {
-  countDiff: number;
-  countPercent: number | null;
-  scoreDiff: number;
-  scorePercent: number | null;
-};
-
-function computeTrend(
-  latest?: VersionSummary["checkRun"],
-  previous?: VersionSummary["checkRun"]
-) {
-  if (!latest || !previous) return null;
-  const countDiff = latest.totalCount - previous.totalCount;
-  const countPercent =
-    previous.totalCount > 0 ? (countDiff / previous.totalCount) * 100 : null;
-  const scoreDiff = latest.aimaiScore - previous.aimaiScore;
-  const scorePercent =
-    previous.aimaiScore !== 0 ? (scoreDiff / previous.aimaiScore) * 100 : null;
-  return { countDiff, countPercent, scoreDiff, scorePercent } satisfies Trend;
-}
 
 // DiffEditor の自動リサイズがうまく働かないことがあるので、マウント時に wordWrap を設定し直す
 const handleDiffMount = (diffEditor: MonacoEditor.IStandaloneDiffEditor) => {
@@ -80,6 +58,9 @@ export default function History() {
   const [articleDeleteError, setArticleDeleteError] = useState<string | null>(
     null
   );
+
+  const deletingArticleId =
+    articleDeleteLoading && articleDeleteTarget ? articleDeleteTarget.id : null;
 
   const selectedSummaries = useMemo(() => {
     if (!article) return [] as VersionSummary[];
@@ -278,59 +259,16 @@ export default function History() {
     <>
       <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
         <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px,1fr]">
-          {/* カード枠のスタイルを共通化して見た目差異を防ぐ */}
-          <SurfaceCard
-            as="section"
-            className="bg-white/80 p-4 backdrop-blur"
-          >
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-emerald-700">
-                記事一覧
-              </h2>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                onClick={() => loadSummaries(selectedArticleId)}
-                disabled={loading}
-              >
-                {loading ? "更新中..." : "再読み込み"}
-              </Button>
-            </div>
-            {summaryError && (
-              <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-                {summaryError}
-              </p>
-            )}
-            {!loading && summaries.length === 0 && !summaryError && (
-              <p className="mt-3 text-xs text-muted-foreground">
-                まだ保存された記事がありません。
-              </p>
-            )}
-            <div className="mt-4 space-y-3">
-              {summaries.map((item) => {
-                const latestRun = item.latest?.checkRun;
-                const previousRun = item.previous?.checkRun;
-                const trend = computeTrend(latestRun, previousRun);
-                const isActive = selectedArticleId === item.id;
-                const isDeletingArticle =
-                  articleDeleteLoading && articleDeleteTarget?.id === item.id;
-                return (
-                  <ArticleSummaryCard
-                    key={item.id}
-                    article={item}
-                    isActive={isActive}
-                    latestRun={latestRun}
-                    previousRun={previousRun}
-                    trend={trend}
-                    onSelect={() => setSelectedArticleId(item.id)}
-                    onDelete={() => openArticleDeleteDialog(item)}
-                    deleting={isDeletingArticle}
-                  />
-                );
-              })}
-            </div>
-          </SurfaceCard>
+          <HistoryArticleSidebar
+            summaries={summaries}
+            loading={loading}
+            errorMessage={summaryError}
+            selectedArticleId={selectedArticleId}
+            onReload={() => loadSummaries(selectedArticleId)}
+            onSelect={(id) => setSelectedArticleId(id)}
+            onDelete={(summary) => openArticleDeleteDialog(summary)}
+            deletingArticleId={deletingArticleId}
+          />
 
           <section className="space-y-6">
             {!selectedArticleId ? (
@@ -428,89 +366,15 @@ export default function History() {
                   )}
                 </div>
 
-                <SurfaceCard className="bg-white/80 p-5">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-emerald-700">
-                      Diff
-                    </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                      onClick={clearSelection}
-                    >
-                      選択をクリア
-                    </Button>
-                  </div>
-                  {selectedSummaries.length > 0 && (
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      {selectedSummaries.map((v, idx) => (
-                        <div
-                          key={v.id}
-                          className="rounded-xl border border-emerald-100 bg-emerald-500/5 px-4 py-3 text-xs"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-800">
-                              {idx === 0 ? "基準" : "比較"} v{v.index + 1}
-                            </span>
-                            <span className="text-[11px] text-muted-foreground">
-                              {formatDateTime(v.createdAt)}
-                            </span>
-                          </div>
-                          {v.checkRun && (
-                            <div className="mt-2 grid grid-cols-2 gap-2 font-mono">
-                              <div className="rounded-lg bg-white px-3 py-2 text-emerald-700">
-                                件数 {v.checkRun.totalCount}
-                              </div>
-                              <div className="rounded-lg bg-white px-3 py-2 text-emerald-700">
-                                スコア {formatScore(v.checkRun.aimaiScore)}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {selectedVersions.length < 2 && (
-                    <EmptyStateMessage className="mt-3 rounded-lg bg-white px-4 py-3">
-                      Diff を表示するには 2 つのバージョンを選択してください。
-                    </EmptyStateMessage>
-                  )}
-                  {diffError && (
-                    <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-                      {diffError}
-                    </p>
-                  )}
-                  {diffLoading && !diffError && (
-                    <p className="mt-3 text-sm text-muted-foreground">
-                      Diff を読み込み中...
-                    </p>
-                  )}
-                  {/* 選択解除時にアンマウントされる問題の対策 */}
-                  <div
-                    className="mt-4 overflow-hidden rounded-xl border border-emerald-100"
-                    style={{ display: diff && !diffError ? "block" : "none" }}
-                  >
-                    <DiffEditor
-                      key="history-diff-editor"
-                      height="60vh"
-                      language="markdown"
-                      original={diff && !diffError ? diff.left.content : ""}
-                      modified={diff && !diffError ? diff.right.content : ""}
-                      keepCurrentOriginalModel
-                      keepCurrentModifiedModel
-                      onMount={handleDiffMount}
-                      options={{
-                        readOnly: true,
-                        fontSize: 14,
-                        renderSideBySide: true,
-                        wordWrap: "on",
-                        diffWordWrap: "on",
-                        minimap: { enabled: false },
-                      }}
-                    />
-                  </div>
-                </SurfaceCard>
+                <HistoryDiffSection
+                  selectedSummaries={selectedSummaries}
+                  selectedVersionsCount={selectedVersions.length}
+                  diff={diff}
+                  diffError={diffError}
+                  diffLoading={diffLoading}
+                  onClearSelection={clearSelection}
+                  onDiffMount={handleDiffMount}
+                />
               </>
             )}
           </section>
