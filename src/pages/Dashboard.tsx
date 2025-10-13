@@ -1,13 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchDashboard, type DashboardResponse } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { SummarySection } from "@/components/organisms/dashboard/SummarySection";
-import { ScoreTrendSection } from "@/components/organisms/dashboard/ScoreTrendSection";
-import { CategoryTrendSection } from "@/components/organisms/dashboard/CategoryTrendSection";
-import { FrequentPhrasesSection } from "@/components/organisms/dashboard/FrequentPhrasesSection";
-import { Button } from "@/components/ui/button";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
+import { DashboardHeader } from "@/components/organisms/dashboard/DashboardHeader";
+import { DashboardContentStack } from "@/components/organisms/dashboard/DashboardContentStack";
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
@@ -68,27 +65,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-semibold text-slate-900">
-              ダッシュボード
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              曖昧度スコアの推移や頻出語句を振り返り、改善状況を把握しましょう。
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-              onClick={handleRefresh}
-              disabled={loading}
-            >
-              {loading ? "更新中..." : "最新の情報に更新"}
-            </Button>
-          </div>
-        </header>
+        <DashboardHeader loading={loading} onRefresh={handleRefresh} />
 
         {showSkeleton ? (
           <div className="space-y-4">
@@ -105,17 +82,13 @@ export default function Dashboard() {
             データを取得できませんでした。
           </EmptyStateMessage>
         ) : (
-          <div className="space-y-6">
-            <SummarySection summary={data.summary} />
-            <ScoreTrendSection entries={data.scoreTrend} />
-            <CategoryTrendSection entries={data.categoryTrend} />
-            <FrequentPhrasesSection entries={data.frequentPhrases} />
-            {!hasContent ? (
-              <EmptyStateMessage>
-                記事を保存すると履歴が集計されます。
-              </EmptyStateMessage>
-            ) : null}
-          </div>
+          <DashboardContentStack
+            summary={data.summary}
+            scoreTrend={data.scoreTrend}
+            categoryTrend={data.categoryTrend}
+            frequentPhrases={data.frequentPhrases}
+            hasContent={hasContent}
+          />
         )}
       </div>
     </div>

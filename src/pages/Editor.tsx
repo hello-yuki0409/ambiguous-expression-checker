@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import EditorCore, { type OnMount } from "@monaco-editor/react";
+import { type OnMount } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
-import FindingsPanel from "@/components/FindingsPanel";
 import RewriteDialog from "@/components/RewriteDialog";
 import { detect, type Finding } from "@/lib/detection";
 import { defaultPatterns } from "@/lib/patterns";
-import { Button } from "@/components/ui/button";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { EditorTitleForm } from "@/components/molecules/editor/EditorTitleForm";
 import { EditorActionBar } from "@/components/molecules/editor/EditorActionBar";
-import { HistoryRunListItem } from "@/components/molecules/editor/HistoryRunListItem";
+import { EditorWorkspace } from "@/components/organisms/editor/EditorWorkspace";
+import { EditorHistorySection } from "@/components/organisms/editor/EditorHistorySection";
 import {
   loadHistory,
   pushHistory,
@@ -18,7 +17,6 @@ import {
 } from "@/lib/history";
 import { saveVersion } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { ConfirmDialog } from "@/components/molecules/dialogs/ConfirmDialog";
 
 const STORAGE_KEY = "aimai__lastContent";
 const TITLE_KEY = "aimai__articleTitle";
@@ -311,89 +309,25 @@ export default function Editor() {
             )}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px] lg:grid-cols-[minmax(0,1fr)_320px]">
-            <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-inner">
-              <EditorCore
-                height="68vh"
-                defaultLanguage="markdown"
-                value={content}
-                onChange={(v) => setContent(v ?? "")}
-                onMount={onMount}
-                options={{
-                  wordWrap: "on",
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  lineNumbers: "on",
-                  renderWhitespace: "boundary",
-                }}
-              />
-            </div>
-
-            <SurfaceCard className="bg-white/80 p-5">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-emerald-700">
-                  検出一覧（{findings.length}件）
-                </h2>
-              </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                項目をクリックすると該当位置へジャンプし、「候補」ボタンでリライトを確認できます。
-              </p>
-              <div className="mt-4 max-h-[60vh] space-y-3 overflow-y-auto pr-1">
-                <FindingsPanel
-                  findings={findings}
-                  onJump={jumpTo}
-                  onSelect={(f) => setSelected(f)}
-                />
-              </div>
-            </SurfaceCard>
-          </div>
+          <EditorWorkspace
+            content={content}
+            onContentChange={setContent}
+            onMount={onMount}
+            findings={findings}
+            onJump={jumpTo}
+            onSelectFinding={(f) => setSelected(f)}
+          />
         </SurfaceCard>
-
-        <aside>
-          <SurfaceCard className="bg-white/80 p-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-emerald-700">
-                直近履歴
-              </h3>
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
-                disabled={history.length === 0}
-                onClick={() => {
-                  if (history.length === 0) return;
-                  setOpenDelete(true);
-                }}
-              >
-                履歴を削除
-              </Button>
-            </div>
-            <ConfirmDialog
-              open={openDelete}
-              onOpenChange={setOpenDelete}
-              title="直近の履歴をすべて削除しますか？"
-              description="この操作は取り消せません"
-              confirmLabel="削除する"
-              onConfirm={() => {
-                clearHistory();
-                setHistory([]);
-                setOpenDelete(false);
-              }}
-            />
-
-            {history.length === 0 ? (
-              <p className="mt-3 text-xs text-muted-foreground">
-                まだ履歴はありません
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2 text-xs">
-                {history.map((h) => (
-                  <HistoryRunListItem key={h.ts} entry={h} />
-                ))}
-              </ul>
-            )}
-          </SurfaceCard>
-        </aside>
+        <EditorHistorySection
+          history={history}
+          deleteDialogOpen={openDelete}
+          onDeleteDialogChange={setOpenDelete}
+          onConfirmDelete={() => {
+            clearHistory();
+            setHistory([]);
+            setOpenDelete(false);
+          }}
+        />
 
         {/* 候補モーダル */}
         <RewriteDialog
