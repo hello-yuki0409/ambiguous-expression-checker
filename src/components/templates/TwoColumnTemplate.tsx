@@ -16,9 +16,11 @@ export function TwoColumnTemplate({
   mainWrapperClassName,
   sideWrapperClassName,
 }: TwoColumnTemplateProps) {
-  // 二列レイアウトのグリッドをテンプレート化し、左右カラムの構成を共通化
+  // 二列レイアウトのグリッドをテンプレート化する
   return (
-    <div className={cn("grid gap-6 lg:grid-cols-[minmax(0,1fr),320px]", className)}>
+    <div
+      className={cn("grid gap-6 lg:grid-cols-[minmax(0,1fr),320px]", className)}
+    >
       <div className={cn("min-w-0", mainWrapperClassName)}>{main}</div>
       <div className={cn("min-w-0", sideWrapperClassName)}>{side}</div>
     </div>

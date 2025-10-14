@@ -261,8 +261,20 @@ export default function History() {
     <>
     <PageShell>
       <TwoColumnTemplate
-        className="items-start"
+        className="items-start lg:grid-cols-[320px,minmax(0,1fr)]"
         main={
+          <HistoryArticleSidebar
+            summaries={summaries}
+            loading={loading}
+            errorMessage={summaryError}
+            selectedArticleId={selectedArticleId}
+            onReload={() => loadSummaries(selectedArticleId)}
+            onSelect={(id) => setSelectedArticleId(id)}
+            onDelete={(summary) => openArticleDeleteDialog(summary)}
+            deletingArticleId={deletingArticleId}
+          />
+        }
+        side={
           <section className="space-y-6">
             {!selectedArticleId ? (
               <EmptyStateMessage className="bg-white/60 text-center">
@@ -371,18 +383,6 @@ export default function History() {
               </>
             )}
           </section>
-        }
-        side={
-          <HistoryArticleSidebar
-            summaries={summaries}
-            loading={loading}
-            errorMessage={summaryError}
-            selectedArticleId={selectedArticleId}
-            onReload={() => loadSummaries(selectedArticleId)}
-            onSelect={(id) => setSelectedArticleId(id)}
-            onDelete={(summary) => openArticleDeleteDialog(summary)}
-            deletingArticleId={deletingArticleId}
-          />
         }
       />
     </PageShell>
