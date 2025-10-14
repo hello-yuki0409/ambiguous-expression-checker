@@ -13,6 +13,7 @@ import {
   type AuthMode,
 } from "@/components/molecules/auth/AuthModeSwitcher";
 import { PageShell } from "@/components/templates/PageShell";
+import { AuthPageTemplate } from "@/components/templates/AuthPageTemplate";
 
 type LocationState = {
   from?: {
@@ -94,18 +95,25 @@ export default function Login() {
     : "ログイン";
 
   return (
-    <PageShell className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-2xl border border-emerald-100 bg-white/80 p-8 shadow-lg backdrop-blur">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-semibold text-emerald-700">{title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {mode === "signUp"
-              ? "メールアドレスとパスワードでアカウントを作成します。"
-              : "登録済みのメールアドレスでログインしてください。"}
-          </p>
-        </div>
-
-        <form className="space-y-4" onSubmit={handleSubmit}>
+    <AuthPageTemplate
+      title={title}
+      description={
+        mode === "signUp"
+          ? "メールアドレスとパスワードでアカウントを作成します。"
+          : "登録済みのメールアドレスでログインしてください。"
+      }
+      footer={
+        <AuthModeSwitcher
+          mode={mode}
+          onSwitch={(nextMode) => {
+            setMode(nextMode);
+            setError(null);
+          }}
+          className="mt-6"
+        />
+      }
+    >
+      <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="text-xs font-medium text-emerald-700" htmlFor="email">
               メールアドレス
@@ -163,17 +171,7 @@ export default function Login() {
           >
             {submitLabel}
           </Button>
-        </form>
-
-        <AuthModeSwitcher
-          mode={mode}
-          onSwitch={(nextMode) => {
-            setMode(nextMode);
-            setError(null);
-          }}
-          className="mt-6"
-        />
-      </div>
-    </PageShell>
+      </form>
+    </AuthPageTemplate>
   );
 }
