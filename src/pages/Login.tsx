@@ -12,6 +12,7 @@ import {
   AuthModeSwitcher,
   type AuthMode,
 } from "@/components/molecules/auth/AuthModeSwitcher";
+import { PageShell } from "@/components/templates/PageShell";
 
 type LocationState = {
   from?: {
@@ -77,9 +78,9 @@ export default function Login() {
 
   if (authLoading && !user) {
     return (
-      <div className="flex h-screen items-center justify-center bg-emerald-50 text-emerald-700">
-        認証状態を確認しています...
-      </div>
+      <PageShell className="flex h-screen items-center justify-center">
+        <div className="text-emerald-700">認証状態を確認しています...</div>
+      </PageShell>
     );
   }
 
@@ -93,7 +94,7 @@ export default function Login() {
     : "ログイン";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-emerald-50 via-white to-white p-6">
+    <PageShell className="flex min-h-screen items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-emerald-100 bg-white/80 p-8 shadow-lg backdrop-blur">
         <div className="mb-6 text-center">
           <h1 className="text-xl font-semibold text-emerald-700">{title}</h1>
@@ -173,6 +174,6 @@ export default function Login() {
           className="mt-6"
         />
       </div>
-    </div>
+    </PageShell>
   );
 }

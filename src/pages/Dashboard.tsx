@@ -3,6 +3,7 @@ import { fetchDashboard, type DashboardResponse } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
 import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
+import { PageShell } from "@/components/templates/PageShell";
 import { DashboardHeader } from "@/components/organisms/dashboard/DashboardHeader";
 import { DashboardContentStack } from "@/components/organisms/dashboard/DashboardContentStack";
 
@@ -63,8 +64,7 @@ export default function Dashboard() {
   }, [data]);
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+    <PageShell>
         <DashboardHeader loading={loading} onRefresh={handleRefresh} />
 
         {showSkeleton ? (
@@ -90,7 +90,6 @@ export default function Dashboard() {
             hasContent={hasContent}
           />
         )}
-      </div>
-    </div>
+    </PageShell>
   );
 }

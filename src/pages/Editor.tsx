@@ -9,6 +9,8 @@ import { EditorTitleForm } from "@/components/molecules/editor/EditorTitleForm";
 import { EditorActionBar } from "@/components/molecules/editor/EditorActionBar";
 import { EditorWorkspace } from "@/components/organisms/editor/EditorWorkspace";
 import { EditorHistorySection } from "@/components/organisms/editor/EditorHistorySection";
+import { PageShell } from "@/components/templates/PageShell";
+import { TwoColumnTemplate } from "@/components/templates/TwoColumnTemplate";
 import {
   loadHistory,
   pushHistory,
@@ -276,74 +278,73 @@ export default function Editor() {
   };
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
-      <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[minmax(0,1fr),320px]">
-        {/* カードレイアウトを SurfaceCard にまとめて視覚のズレを防ぐ */}
-        <SurfaceCard
-          as="section"
-          className="space-y-4 bg-white/70 p-6 backdrop-blur"
-        >
-          <div className="space-y-3">
-            <EditorTitleForm
-              title={title}
-              onChange={handleTitleChange}
-              articleId={articleId}
-            />
-            <EditorActionBar
-              ms={ms}
-              onClear={clearAll}
-              onRunCheck={runCheck}
-              onSave={handleSave}
-              saving={saving}
-            />
-            {(saveError || saveMessage) && (
-              <div
-                className={`rounded-xl border px-4 py-3 text-sm ${
-                  saveError
-                    ? "border-red-200 bg-red-50 text-red-700"
-                    : "border-emerald-200 bg-emerald-50 text-emerald-700"
-                }`}
-              >
-                {saveError ?? saveMessage}
-              </div>
-            )}
-          </div>
+    <PageShell>
+      <TwoColumnTemplate
+        main={
+          <SurfaceCard as="section" className="space-y-4 bg-white/70 p-6 backdrop-blur">
+            <div className="space-y-3">
+              <EditorTitleForm
+                title={title}
+                onChange={handleTitleChange}
+                articleId={articleId}
+              />
+              <EditorActionBar
+                ms={ms}
+                onClear={clearAll}
+                onRunCheck={runCheck}
+                onSave={handleSave}
+                saving={saving}
+              />
+              {(saveError || saveMessage) && (
+                <div
+                  className={`rounded-xl border px-4 py-3 text-sm ${
+                    saveError
+                      ? "border-red-200 bg-red-50 text-red-700"
+                      : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  }`}
+                >
+                  {saveError ?? saveMessage}
+                </div>
+              )}
+            </div>
 
-          <EditorWorkspace
-            content={content}
-            onContentChange={setContent}
-            onMount={onMount}
-            findings={findings}
-            onJump={jumpTo}
-            onSelectFinding={(f) => setSelected(f)}
+            <EditorWorkspace
+              content={content}
+              onContentChange={setContent}
+              onMount={onMount}
+              findings={findings}
+              onJump={jumpTo}
+              onSelectFinding={(f) => setSelected(f)}
+            />
+          </SurfaceCard>
+        }
+        side={
+          <EditorHistorySection
+            history={history}
+            deleteDialogOpen={openDelete}
+            onDeleteDialogChange={setOpenDelete}
+            onConfirmDelete={() => {
+              clearHistory();
+              setHistory([]);
+              setOpenDelete(false);
+            }}
           />
-        </SurfaceCard>
-        <EditorHistorySection
-          history={history}
-          deleteDialogOpen={openDelete}
-          onDeleteDialogChange={setOpenDelete}
-          onConfirmDelete={() => {
-            clearHistory();
-            setHistory([]);
-            setOpenDelete(false);
-          }}
-        />
+        }
+      />
 
-        {/* 候補モーダル */}
-        <RewriteDialog
-          open={!!selected}
-          onOpenChange={(v) => !v && setSelected(null)}
-          original={selected?.text ?? ""}
-          context={
-            selected
-              ? buildContextSnippet(content, selected.start, selected.end)
-              : content
-          }
-          category={selected?.category}
-          style="敬体"
-          onReplace={replaceSelected}
-        />
-      </div>
-    </div>
+      <RewriteDialog
+        open={!!selected}
+        onOpenChange={(v) => !v && setSelected(null)}
+        original={selected?.text ?? ""}
+        context={
+          selected
+            ? buildContextSnippet(content, selected.start, selected.end)
+            : content
+        }
+        category={selected?.category}
+        style="敬体"
+        onReplace={replaceSelected}
+      />
+    </PageShell>
   );
 }

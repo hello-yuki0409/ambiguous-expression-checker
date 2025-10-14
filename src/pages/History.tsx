@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { StatusChip } from "@/components/atoms/StatusChip";
-import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 import { MetricPill } from "@/components/atoms/MetricPill";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
 import { VersionHistoryCard } from "@/components/molecules/history/VersionHistoryCard";
 import { HistoryArticleSidebar } from "@/components/organisms/history/HistoryArticleSidebar";
 import { HistoryDiffSection } from "@/components/organisms/history/HistoryDiffSection";
+import { PageShell } from "@/components/templates/PageShell";
+import { TwoColumnTemplate } from "@/components/templates/TwoColumnTemplate";
 import {
   fetchArticlesSummary,
   fetchArticleDetail,
@@ -257,19 +259,10 @@ export default function History() {
 
   return (
     <>
-      <div className="min-h-full bg-gradient-to-br from-emerald-50 via-white to-white">
-        <div className="mx-auto grid max-w-6xl gap-6 p-6 lg:grid-cols-[320px,1fr]">
-          <HistoryArticleSidebar
-            summaries={summaries}
-            loading={loading}
-            errorMessage={summaryError}
-            selectedArticleId={selectedArticleId}
-            onReload={() => loadSummaries(selectedArticleId)}
-            onSelect={(id) => setSelectedArticleId(id)}
-            onDelete={(summary) => openArticleDeleteDialog(summary)}
-            deletingArticleId={deletingArticleId}
-          />
-
+    <PageShell>
+      <TwoColumnTemplate
+        className="items-start"
+        main={
           <section className="space-y-6">
             {!selectedArticleId ? (
               <EmptyStateMessage className="bg-white/60 text-center">
@@ -378,8 +371,21 @@ export default function History() {
               </>
             )}
           </section>
-        </div>
-      </div>
+        }
+        side={
+          <HistoryArticleSidebar
+            summaries={summaries}
+            loading={loading}
+            errorMessage={summaryError}
+            selectedArticleId={selectedArticleId}
+            onReload={() => loadSummaries(selectedArticleId)}
+            onSelect={(id) => setSelectedArticleId(id)}
+            onDelete={(summary) => openArticleDeleteDialog(summary)}
+            deletingArticleId={deletingArticleId}
+          />
+        }
+      />
+    </PageShell>
 
       <ArticleDeleteDialog
         open={Boolean(articleDeleteTarget)}
