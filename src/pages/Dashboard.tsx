@@ -1,67 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
-import { fetchDashboard, type DashboardResponse } from "@/lib/api";
 import { useAuth } from "@/hooks/useAuth";
-import { SurfaceCard } from "@/components/atoms/SurfaceCard";
-import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
 import { PageShell } from "@/components/templates/PageShell";
 import { DashboardHeader } from "@/components/organisms/dashboard/DashboardHeader";
 import { DashboardContentStack } from "@/components/organisms/dashboard/DashboardContentStack";
+import { SurfaceCard } from "@/components/atoms/SurfaceCard";
+import { EmptyStateMessage } from "@/components/atoms/EmptyStateMessage";
+import { useDashboardData } from "@/hooks/useDashboardData";
 
 export default function Dashboard() {
   const { user, loading: authLoading } = useAuth();
-  const [data, setData] = useState<DashboardResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    if (!user) {
-      setData(null);
-      return;
-    }
-    let cancelled = false;
-
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await fetchDashboard();
-        if (cancelled) return;
-        setData(response);
-      } catch (err) {
-        if (cancelled) return;
-        setError(
-          (err as Error).message ?? "ダッシュボードの読み込みに失敗しました"
-        );
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user, refreshKey]);
-
-  const handleRefresh = () => {
-    if (loading) return;
-    setRefreshKey((prev) => prev + 1);
-  };
+  const { data, loading, error, handleRefresh, hasContent } = useDashboardData(user);
 
   const showSkeleton = loading || authLoading;
-  const hasContent = useMemo(() => {
-    if (!data) return false;
-    return (
-      data.summary.latest !== null ||
-      data.scoreTrend.length > 0 ||
-      data.categoryTrend.length > 0 ||
-      data.frequentPhrases.length > 0
-    );
-  }, [data]);
 
   return (
     <PageShell>
