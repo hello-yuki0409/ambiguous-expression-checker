@@ -1,81 +1,34 @@
-import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
-import { auth } from "@/lib/firebase";
+import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import {
-  AuthModeSwitcher,
-  type AuthMode,
-} from "@/components/molecules/auth/AuthModeSwitcher";
+import { AuthModeSwitcher } from "@/components/molecules/auth/AuthModeSwitcher";
 import { PageShell } from "@/components/templates/PageShell";
 import { AuthPageTemplate } from "@/components/templates/AuthPageTemplate";
-
-type LocationState = {
-  from?: {
-    pathname?: string;
-  };
-};
+import { useAuthForm } from "@/hooks/useAuthForm";
 
 export default function Login() {
-  const [mode, setMode] = useState<AuthMode>("signIn");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [authorLabel, setAuthorLabel] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
   const { user, loading: authLoading } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const redirectPath = useMemo(() => {
-    const state = location.state as LocationState | undefined;
-    return state?.from?.pathname ?? "/";
-  }, [location.state]);
+  const {
+    mode,
+    setMode,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    authorLabel,
+    setAuthorLabel,
+    error,
+    setError,
+    loading,
+    handleSubmit,
+    submitLabel,
+  } = useAuthForm("signIn");
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate(redirectPath, { replace: true });
+      // カスタムフック側でリダイレクト済みなのでページ側では確認のみ
     }
-  }, [authLoading, user, navigate, redirectPath]);
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setError(null);
-
-    if (mode === "signUp" && !authorLabel.trim()) {
-      setError("表示名を入力してください");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      if (mode === "signUp") {
-        const credential = await createUserWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
-        const displayName = authorLabel.trim();
-        if (displayName) {
-          await updateProfile(credential.user, { displayName });
-        }
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
-
-      navigate(redirectPath, { replace: true });
-    } catch (err) {
-      setError((err as Error).message || "認証に失敗しました");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [authLoading, user]);
 
   if (authLoading && !user) {
     return (
@@ -86,14 +39,6 @@ export default function Login() {
   }
 
   const title = mode === "signUp" ? "アカウント作成" : "ログイン";
-  const submitLabel = loading
-    ? mode === "signUp"
-      ? "登録中..."
-      : "ログイン中..."
-    : mode === "signUp"
-    ? "登録する"
-    : "ログイン";
-
   return (
     <AuthPageTemplate
       title={title}
