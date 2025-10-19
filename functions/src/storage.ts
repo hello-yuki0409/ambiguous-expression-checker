@@ -1,12 +1,40 @@
 import { randomUUID } from "crypto";
-import type { Prisma, AimaiCategory } from "@prisma/client";
 import { prisma } from "./db";
+
+type MinimalModel = {
+  findMany?: (args: unknown) => Promise<unknown>;
+  findFirst?: (args: unknown) => Promise<unknown>;
+  findUnique?: (args: unknown) => Promise<unknown>;
+  create?: (args: unknown) => Promise<unknown>;
+  update?: (args: unknown) => Promise<unknown>;
+  delete?: (args: unknown) => Promise<unknown>;
+  deleteMany?: (args: unknown) => Promise<unknown>;
+  upsert?: (args: unknown) => Promise<unknown>;
+  count?: (args: unknown) => Promise<number>;
+};
+
+type MinimalTx = {
+  user: Required<Pick<MinimalModel, "upsert">>;
+  article: Required<
+    Pick<
+      MinimalModel,
+      "findUnique" | "update" | "create" | "delete" | "findFirst" | "deleteMany"
+    >
+  >;
+  articleVersion: Required<
+    Pick<MinimalModel, "findFirst" | "create" | "count" | "delete" | "deleteMany">
+  >;
+  checkRun: Required<Pick<MinimalModel, "create" | "deleteMany">>;
+  finding: Required<Pick<MinimalModel, "deleteMany">>;
+};
+
+type TransactionRunner = <T>(fn: (tx: MinimalTx) => Promise<T>) => Promise<T>;
 
 export type CleanFinding = {
   start: number;
   end: number;
   matchedText: string;
-  category: AimaiCategory | string;
+  category: string;
   severity: number;
   reason?: string | null;
   patternId?: string | null;
@@ -441,18 +469,21 @@ class PrismaStorage implements StorageAdapter {
     }
 
     if (!currentAuthorId) {
-      await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-        await tx.user.upsert({
-          where: { id: authorId },
-          update: {},
-          create: { id: authorId, authorLabel: null },
-        } as unknown as Parameters<typeof tx.user.upsert>[0]);
+      // Prisma.TransactionClient 型は使わず、最小型でコールバック引数を表現
+      await (prisma.$transaction as unknown as TransactionRunner)(
+        async (tx) => {
+          await tx.user.upsert({
+            where: { id: authorId },
+            update: {},
+            create: { id: authorId, authorLabel: null },
+          } as unknown);
 
-        await tx.article.update({
-          where: { id: articleId },
-          data: { author: { connect: { id: authorId } } },
-        } as unknown as Parameters<typeof tx.article.update>[0]);
-      });
+          await tx.article.update({
+            where: { id: articleId },
+            data: { author: { connect: { id: authorId } } },
+          } as unknown);
+        }
+      );
 
       const claimed = (await prisma.articleVersion.findFirst({
         where: { id: versionId, article: { authorId } },
@@ -482,22 +513,22 @@ class PrismaStorage implements StorageAdapter {
       throw new Error("unauthorized");
     }
 
-    const result = await prisma.$transaction(
-      async (tx: Prisma.TransactionClient) => {
+    const result = await (prisma.$transaction as unknown as TransactionRunner)(
+      async (tx) => {
         const normalisedLabel = authorLabel ?? null;
 
         await tx.user.upsert({
           where: { id: authorId },
           update: { authorLabel: normalisedLabel },
           create: { id: authorId, authorLabel: normalisedLabel },
-        } as unknown as Parameters<typeof tx.user.upsert>[0]);
+        } as unknown);
 
         let articleRecord: RawArticle | null = null;
 
         if (articleId) {
           articleRecord = (await tx.article.findUnique({
             where: { id: articleId },
-          } as unknown as Parameters<typeof tx.article.findUnique>[0])) as RawArticle | null;
+          } as unknown)) as RawArticle | null;
 
           if (!articleRecord) {
             throw new Error("article_not_found");
@@ -518,9 +549,10 @@ class PrismaStorage implements StorageAdapter {
               authorLabel: normalisedLabel,
               author: { connect: { id: authorId } },
             },
-          } as unknown as Parameters<typeof tx.article.create>[0])) as RawArticle;
+          } as unknown)) as RawArticle;
         } else {
-          const updateData: Prisma.ArticleUpdateInput = {};
+          // Prisma.ArticleUpdateInput を使わず、素直なオブジェクトで構築
+          const updateData: Record<string, unknown> = {};
 
           if (title !== undefined && title !== articleRecord.title) {
             updateData.title = title;
@@ -544,13 +576,14 @@ class PrismaStorage implements StorageAdapter {
             articleRecord = (await tx.article.update({
               where: { id: articleRecord.id },
               data: updateData,
-            } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+            } as unknown)) as RawArticle;
           }
         }
 
-        const index = await tx.articleVersion.count({
-          where: { articleId: articleRecord.id },
-        });
+        const index =
+          (await tx.articleVersion.count({
+            where: { articleId: articleRecord.id },
+          } as unknown)) ?? 0;
 
         const version = (await tx.articleVersion.create({
           data: {
@@ -559,12 +592,12 @@ class PrismaStorage implements StorageAdapter {
             title: title ?? articleRecord.title ?? null,
             content,
           },
-        } as unknown as Parameters<typeof tx.articleVersion.create>[0])) as RawVersion;
+        } as unknown)) as RawVersion;
 
         const updatedArticle = (await tx.article.update({
           where: { id: articleRecord.id },
           data: { updatedAt: new Date() },
-        } as unknown as Parameters<typeof tx.article.update>[0])) as RawArticle;
+        } as unknown)) as RawArticle;
 
         const checkRun = (await tx.checkRun.create({
           data: {
@@ -579,7 +612,7 @@ class PrismaStorage implements StorageAdapter {
                 }
               : undefined,
           },
-        } as unknown as Parameters<typeof tx.checkRun.create>[0])) as RawCheckRun;
+        } as unknown)) as RawCheckRun;
 
         return {
           articleRecord: updatedArticle,
@@ -639,7 +672,7 @@ class PrismaStorage implements StorageAdapter {
   }
 
   async deleteVersion(versionId: string, authorId: string): Promise<boolean> {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return (prisma.$transaction as unknown as TransactionRunner)(async (tx) => {
       const version = (await tx.articleVersion.findFirst({
         where: { id: versionId, article: { authorId } },
         select: {
@@ -647,7 +680,7 @@ class PrismaStorage implements StorageAdapter {
           articleId: true,
           checkRuns: { select: { id: true } },
         },
-      } as unknown as Parameters<typeof tx.articleVersion.findFirst>[0])) as
+      } as unknown)) as
         | (RawVersion & {
             articleId?: string | null;
             checkRuns?: { id: string }[];
@@ -662,21 +695,21 @@ class PrismaStorage implements StorageAdapter {
       if (checkRunIds.length > 0) {
         await tx.finding.deleteMany({
           where: { runId: { in: checkRunIds } },
-        } as unknown as Parameters<typeof tx.finding.deleteMany>[0]);
+        } as unknown);
         await tx.checkRun.deleteMany({
           where: { id: { in: checkRunIds } },
-        } as unknown as Parameters<typeof tx.checkRun.deleteMany>[0]);
+        } as unknown);
       }
 
       await tx.articleVersion.delete({
         where: { id: versionId },
-      } as unknown as Parameters<typeof tx.articleVersion.delete>[0]);
+      } as unknown);
 
       if (version.articleId) {
         await tx.article.update({
           where: { id: version.articleId },
           data: { updatedAt: new Date() },
-        } as unknown as Parameters<typeof tx.article.update>[0]);
+        } as unknown);
       }
 
       return true;
@@ -684,7 +717,7 @@ class PrismaStorage implements StorageAdapter {
   }
 
   async deleteArticle(articleId: string, authorId: string): Promise<boolean> {
-    return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    return (prisma.$transaction as unknown as TransactionRunner)(async (tx) => {
       const article = (await tx.article.findFirst({
         where: { id: articleId, authorId },
         select: {
@@ -696,7 +729,7 @@ class PrismaStorage implements StorageAdapter {
             },
           },
         },
-      } as unknown as Parameters<typeof tx.article.findFirst>[0])) as
+      } as unknown)) as
         | (RawArticle & {
             versions?: {
               id: string;
@@ -717,21 +750,21 @@ class PrismaStorage implements StorageAdapter {
       if (checkRunIds.length > 0) {
         await tx.finding.deleteMany({
           where: { runId: { in: checkRunIds } },
-        } as unknown as Parameters<typeof tx.finding.deleteMany>[0]);
+        } as unknown);
         await tx.checkRun.deleteMany({
           where: { id: { in: checkRunIds } },
-        } as unknown as Parameters<typeof tx.checkRun.deleteMany>[0]);
+        } as unknown);
       }
 
       if (versionIds.length > 0) {
         await tx.articleVersion.deleteMany({
           where: { id: { in: versionIds } },
-        } as unknown as Parameters<typeof tx.articleVersion.deleteMany>[0]);
+        } as unknown);
       }
 
       await tx.article.delete({
         where: { id: articleId },
-      } as unknown as Parameters<typeof tx.article.delete>[0]);
+      } as unknown);
 
       return true;
     });
