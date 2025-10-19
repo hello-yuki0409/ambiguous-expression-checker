@@ -2,9 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.versions = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const params_1 = require("firebase-functions/params");
 const client_1 = require("@prisma/client");
 const storage_1 = require("./storage");
 const auth_1 = require("./auth");
+// Prisma を直接使っていなくても、storageManager 側で利用する可能性があるためバインド
+const DATABASE_URL = (0, params_1.defineSecret)("DATABASE_URL");
 const CATEGORY_SET = new Set(Object.values(client_1.AimaiCategory));
 const clampScore = (value) => Math.round(value * 100) / 100;
 function toCharLength(text) {
@@ -75,12 +78,14 @@ function mapVersionSummary(version) {
         checkRun: latestRun ? mapCheckRun(latestRun) : null,
     };
 }
-exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
+exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] }, async (req, res) => {
     try {
         if (req.method === "OPTIONS") {
             res.status(204).end();
             return;
         }
+        // Secret はバインド済み。必要に応じて読み出す場合は以下:
+        // const dbUrl = DATABASE_URL.value();
         const decoded = await (0, auth_1.verifyFirebaseToken)(req.headers.authorization);
         const uid = decoded.uid;
         if (req.method === "GET") {

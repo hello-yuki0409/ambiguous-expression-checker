@@ -42,8 +42,9 @@ const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const openai_1 = __importStar(require("openai"));
 const OPENAI_API_KEY = (0, params_1.defineSecret)("OPENAI_API_KEY");
+const DATABASE_URL = (0, params_1.defineSecret)("DATABASE_URL");
 const DEFAULT_MODEL = process.env.OPENAI_REWRITE_MODEL ?? "gpt-4.1-mini";
-exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY] }, async (req, res) => {
+exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY, DATABASE_URL] }, async (req, res) => {
     try {
         const apiKey = OPENAI_API_KEY.value() || process.env.OPENAI_API_KEY;
         if (!apiKey) {
