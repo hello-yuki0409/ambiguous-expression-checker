@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { randomUUID } from "crypto";
 import { prisma } from "./db";
 
@@ -801,8 +803,144 @@ type SnapshotInput = {
   authorId: string;
 };
 
+type SerializedFinding = StoredFinding;
+
+type SerializedCheckRun = {
+  id: string;
+  aimaiScore: number;
+  totalCount: number;
+  charLength: number;
+  createdAt: string;
+  findings: SerializedFinding[];
+};
+
+type SerializedVersion = {
+  id: string;
+  index: number;
+  title: string | null;
+  content: string;
+  createdAt: string;
+  checkRuns: SerializedCheckRun[];
+};
+
+type SerializedArticle = {
+  id: string;
+  title: string | null;
+  authorLabel: string | null;
+  authorId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  versions: SerializedVersion[];
+};
+
 class MemoryStorage implements StorageAdapter {
-  private articles = new Map<string, MemoryArticle>();
+  private readonly articles = new Map<string, MemoryArticle>();
+  private readonly snapshotPath: string | null;
+  private restoring = false;
+
+  constructor() {
+    this.snapshotPath = this.resolveSnapshotPath();
+    this.loadSnapshot();
+  }
+
+  private resolveSnapshotPath(): string | null {
+    const baseDir = path.resolve(__dirname, "..");
+    const raw = process.env.IN_MEMORY_STORAGE_FILE;
+    const trimmed = typeof raw === "string" ? raw.trim() : "";
+    if (trimmed.toLowerCase() === "disable") {
+      return null;
+    }
+    const resolved =
+      trimmed.length > 0
+        ? path.resolve(baseDir, trimmed)
+        : path.resolve(baseDir, "storage-cache.json");
+    return resolved;
+  }
+
+  private loadSnapshot() {
+    if (!this.snapshotPath) return;
+    if (!fs.existsSync(this.snapshotPath)) return;
+    try {
+      const raw = fs.readFileSync(this.snapshotPath, "utf8");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { articles?: SerializedArticle[] };
+      const articles = Array.isArray(parsed?.articles)
+        ? parsed.articles
+        : [];
+      if (articles.length === 0) return;
+      const hydrated = articles.map((article) => this.toStoredArticle(article));
+      this.restoring = true;
+      this.hydrateArticles(hydrated);
+    } catch (error) {
+      console.warn("[storage] Failed to load memory snapshot", error);
+    } finally {
+      this.restoring = false;
+    }
+  }
+
+  private toStoredArticle(article: SerializedArticle): StoredArticle {
+    return {
+      id: article.id,
+      title: article.title,
+      authorLabel: article.authorLabel,
+      authorId: article.authorId,
+      createdAt: new Date(article.createdAt),
+      updatedAt: new Date(article.updatedAt),
+      versions: (article.versions ?? []).map((version) => ({
+        id: version.id,
+        index: version.index,
+        title: version.title,
+        content: version.content,
+        createdAt: new Date(version.createdAt),
+        checkRuns: (version.checkRuns ?? []).map((run) => ({
+          id: run.id,
+          aimaiScore: run.aimaiScore,
+          totalCount: run.totalCount,
+          charLength: run.charLength,
+          createdAt: new Date(run.createdAt),
+          findings: (run.findings ?? []).map((finding) => ({
+            ...finding,
+          })),
+        })),
+      })),
+    };
+  }
+
+  private persistSnapshot() {
+    if (!this.snapshotPath || this.restoring) return;
+    try {
+      const payload: SerializedArticle[] = [...this.articles.values()].map(
+        (article) => ({
+          id: article.id,
+          title: article.title,
+          authorLabel: article.authorLabel,
+          authorId: article.authorId,
+          createdAt: article.createdAt.toISOString(),
+          updatedAt: article.updatedAt.toISOString(),
+          versions: article.versions.map((version) => ({
+            id: version.id,
+            index: version.index,
+            title: version.title,
+            content: version.content,
+            createdAt: version.createdAt.toISOString(),
+            checkRuns: version.checkRuns.map((run) => ({
+              id: run.id,
+              aimaiScore: run.aimaiScore,
+              totalCount: run.totalCount,
+              charLength: run.charLength,
+              createdAt: run.createdAt.toISOString(),
+              findings: run.findings.map((finding) => ({ ...finding })),
+            })),
+          })),
+        })
+      );
+      const data = JSON.stringify({ articles: payload }, null, 2);
+      fs.mkdirSync(path.dirname(this.snapshotPath), { recursive: true });
+      fs.writeFileSync(this.snapshotPath, data, "utf8");
+    } catch (error) {
+      console.warn("[storage] Failed to persist memory snapshot", error);
+    }
+  }
 
   private ensureArticle(
     articleId: string | null | undefined,
@@ -1003,6 +1141,8 @@ class MemoryStorage implements StorageAdapter {
       article.title = title;
     }
 
+    this.persistSnapshot();
+
     return {
       articleRecord: {
         id: article.id,
@@ -1096,12 +1236,13 @@ class MemoryStorage implements StorageAdapter {
       const versions = (articleData.versions ?? [])
         .slice()
         .sort((a, b) => a.index - b.index)
-        .map((version) => this.toMemoryVersion(version, false));
+        .map((version) => this.toMemoryVersion(version, true));
 
       if (versions.length > 0) {
         target.versions = versions;
       }
     });
+    this.persistSnapshot();
   }
 
   hydrateVersionDetails(version: StoredVersion) {
@@ -1125,6 +1266,7 @@ class MemoryStorage implements StorageAdapter {
       target.versions.push(memoryVersion);
     }
     target.versions.sort((a, b) => a.index - b.index);
+    this.persistSnapshot();
   }
 
   private toMemoryVersion(
@@ -1172,6 +1314,7 @@ class MemoryStorage implements StorageAdapter {
       const [removed] = article.versions.splice(index, 1);
       if (removed) {
         article.updatedAt = new Date();
+        this.persistSnapshot();
       }
       return true;
     }
@@ -1184,6 +1327,7 @@ class MemoryStorage implements StorageAdapter {
       return false;
     }
     this.articles.delete(articleId);
+    this.persistSnapshot();
     return true;
   }
 }

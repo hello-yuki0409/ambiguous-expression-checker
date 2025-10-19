@@ -1,19 +1,12 @@
 {
   "projects": {
-    "default": "green-network-472014-a4"
+    "default": "ambiguous-expression-checker"
   },
   "targets": {
-    "green-network-472014-a4": {
-      "hosting": {
-        "default": [
-          "green-network-472014-a4"
-        ]
-      }
-    },
     "ambiguous-expression-checker": {
       "hosting": {
         "default": [
-          "green-network-472014-a4"
+          "ambiguous-expression-checker"
         ]
       }
     }

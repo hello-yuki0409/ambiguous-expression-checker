@@ -1,6 +1,11 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.storageManager = exports.StorageManager = void 0;
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 const crypto_1 = require("crypto");
 const db_1 = require("./db");
 function toDate(value) {
@@ -225,6 +230,7 @@ class PrismaStorage {
             return convert(candidate);
         }
         if (!currentAuthorId) {
+            // Prisma.TransactionClient 型は使わず、最小型でコールバック引数を表現
             await db_1.prisma.$transaction(async (tx) => {
                 await tx.user.upsert({
                     where: { id: authorId },
@@ -280,6 +286,7 @@ class PrismaStorage {
                 }));
             }
             else {
+                // Prisma.ArticleUpdateInput を使わず、素直なオブジェクトで構築
                 const updateData = {};
                 if (title !== undefined && title !== articleRecord.title) {
                     updateData.title = title;
@@ -301,9 +308,9 @@ class PrismaStorage {
                     }));
                 }
             }
-            const index = await tx.articleVersion.count({
+            const index = (await tx.articleVersion.count({
                 where: { articleId: articleRecord.id },
-            });
+            })) ?? 0;
             const version = (await tx.articleVersion.create({
                 data: {
                     articleId: articleRecord.id,
@@ -447,6 +454,109 @@ class PrismaStorage {
 class MemoryStorage {
     constructor() {
         this.articles = new Map();
+        this.restoring = false;
+        this.snapshotPath = this.resolveSnapshotPath();
+        this.loadSnapshot();
+    }
+    resolveSnapshotPath() {
+        const baseDir = path_1.default.resolve(__dirname, "..");
+        const raw = process.env.IN_MEMORY_STORAGE_FILE;
+        const trimmed = typeof raw === "string" ? raw.trim() : "";
+        if (trimmed.toLowerCase() === "disable") {
+            return null;
+        }
+        const resolved = trimmed.length > 0
+            ? path_1.default.resolve(baseDir, trimmed)
+            : path_1.default.resolve(baseDir, "storage-cache.json");
+        return resolved;
+    }
+    loadSnapshot() {
+        if (!this.snapshotPath)
+            return;
+        if (!fs_1.default.existsSync(this.snapshotPath))
+            return;
+        try {
+            const raw = fs_1.default.readFileSync(this.snapshotPath, "utf8");
+            if (!raw)
+                return;
+            const parsed = JSON.parse(raw);
+            const articles = Array.isArray(parsed?.articles)
+                ? parsed.articles
+                : [];
+            if (articles.length === 0)
+                return;
+            const hydrated = articles.map((article) => this.toStoredArticle(article));
+            this.restoring = true;
+            this.hydrateArticles(hydrated);
+        }
+        catch (error) {
+            console.warn("[storage] Failed to load memory snapshot", error);
+        }
+        finally {
+            this.restoring = false;
+        }
+    }
+    toStoredArticle(article) {
+        return {
+            id: article.id,
+            title: article.title,
+            authorLabel: article.authorLabel,
+            authorId: article.authorId,
+            createdAt: new Date(article.createdAt),
+            updatedAt: new Date(article.updatedAt),
+            versions: (article.versions ?? []).map((version) => ({
+                id: version.id,
+                index: version.index,
+                title: version.title,
+                content: version.content,
+                createdAt: new Date(version.createdAt),
+                checkRuns: (version.checkRuns ?? []).map((run) => ({
+                    id: run.id,
+                    aimaiScore: run.aimaiScore,
+                    totalCount: run.totalCount,
+                    charLength: run.charLength,
+                    createdAt: new Date(run.createdAt),
+                    findings: (run.findings ?? []).map((finding) => ({
+                        ...finding,
+                    })),
+                })),
+            })),
+        };
+    }
+    persistSnapshot() {
+        if (!this.snapshotPath || this.restoring)
+            return;
+        try {
+            const payload = [...this.articles.values()].map((article) => ({
+                id: article.id,
+                title: article.title,
+                authorLabel: article.authorLabel,
+                authorId: article.authorId,
+                createdAt: article.createdAt.toISOString(),
+                updatedAt: article.updatedAt.toISOString(),
+                versions: article.versions.map((version) => ({
+                    id: version.id,
+                    index: version.index,
+                    title: version.title,
+                    content: version.content,
+                    createdAt: version.createdAt.toISOString(),
+                    checkRuns: version.checkRuns.map((run) => ({
+                        id: run.id,
+                        aimaiScore: run.aimaiScore,
+                        totalCount: run.totalCount,
+                        charLength: run.charLength,
+                        createdAt: run.createdAt.toISOString(),
+                        findings: run.findings.map((finding) => ({ ...finding })),
+                    })),
+                })),
+            }));
+            const data = JSON.stringify({ articles: payload }, null, 2);
+            fs_1.default.mkdirSync(path_1.default.dirname(this.snapshotPath), { recursive: true });
+            fs_1.default.writeFileSync(this.snapshotPath, data, "utf8");
+        }
+        catch (error) {
+            console.warn("[storage] Failed to persist memory snapshot", error);
+        }
     }
     ensureArticle(articleId, title, authorLabel, authorId) {
         if (articleId) {
@@ -610,6 +720,7 @@ class MemoryStorage {
         if (title && article.title !== title) {
             article.title = title;
         }
+        this.persistSnapshot();
         return {
             articleRecord: {
                 id: article.id,
@@ -693,11 +804,12 @@ class MemoryStorage {
             const versions = (articleData.versions ?? [])
                 .slice()
                 .sort((a, b) => a.index - b.index)
-                .map((version) => this.toMemoryVersion(version, false));
+                .map((version) => this.toMemoryVersion(version, true));
             if (versions.length > 0) {
                 target.versions = versions;
             }
         });
+        this.persistSnapshot();
     }
     hydrateVersionDetails(version) {
         const articleInfo = version.article;
@@ -716,6 +828,7 @@ class MemoryStorage {
             target.versions.push(memoryVersion);
         }
         target.versions.sort((a, b) => a.index - b.index);
+        this.persistSnapshot();
     }
     toMemoryVersion(version, includeFindings) {
         const runs = (version.checkRuns ?? []).map((run) => ({
@@ -756,6 +869,7 @@ class MemoryStorage {
             const [removed] = article.versions.splice(index, 1);
             if (removed) {
                 article.updatedAt = new Date();
+                this.persistSnapshot();
             }
             return true;
         }
@@ -767,6 +881,7 @@ class MemoryStorage {
             return false;
         }
         this.articles.delete(articleId);
+        this.persistSnapshot();
         return true;
     }
 }

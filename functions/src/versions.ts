@@ -1,3 +1,7 @@
+import { loadEnv } from "./env";
+
+loadEnv();
+
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
@@ -140,6 +144,11 @@ export const versions = onRequest(
   { cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] },
   async (req: Request, res: Response): Promise<void> => {
     try {
+      const dbUrl = DATABASE_URL.value();
+      if (dbUrl) {
+        process.env.DATABASE_URL = dbUrl;
+      }
+
       if (req.method === "OPTIONS") {
         res.status(204).end();
         return;

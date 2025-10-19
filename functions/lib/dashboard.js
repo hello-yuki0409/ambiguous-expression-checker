@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dashboard = void 0;
+const env_1 = require("./env");
+(0, env_1.loadEnv)();
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const auth_1 = require("./auth");
@@ -387,12 +389,14 @@ async function buildDashboardFromMemory(uid) {
 exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] }, async (req, res) => {
     let uid = null;
     try {
+        const dbUrl = DATABASE_URL.value();
+        if (dbUrl) {
+            process.env.DATABASE_URL = dbUrl;
+        }
         if (req.method !== "GET") {
             res.status(405).json({ error: "method_not_allowed" });
             return;
         }
-        // バインドされた Secret を必要に応じて取り出す場合は以下
-        // const _dbUrl = DATABASE_URL.value();
         const decoded = await (0, auth_1.verifyFirebaseToken)(req.headers.authorization);
         uid = decoded.uid;
         // まずは Prisma 直読みを試す

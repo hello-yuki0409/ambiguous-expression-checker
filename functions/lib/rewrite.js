@@ -34,10 +34,8 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.rewrite = void 0;
-const dotenv = __importStar(require("dotenv"));
-// エミュレータの時だけ .env.local をロードする
-if (process.env.FUNCTIONS_EMULATOR)
-    dotenv.config({ path: ".env.local" });
+const env_1 = require("./env");
+(0, env_1.loadEnv)();
 const https_1 = require("firebase-functions/v2/https");
 const params_1 = require("firebase-functions/params");
 const openai_1 = __importStar(require("openai"));

@@ -11,6 +11,11 @@ export async function verifyFirebaseToken(authorizationHeader?: string) {
     throw new Error("unauthorized");
   }
   const idToken = authorizationHeader.split(" ")[1];
-  const decoded = await getAuth().verifyIdToken(idToken);
-  return decoded;
+  try {
+    const decoded = await getAuth().verifyIdToken(idToken);
+    return decoded;
+  } catch (error) {
+    console.error("verifyFirebaseToken failed", error);
+    throw new Error("unauthorized");
+  }
 }

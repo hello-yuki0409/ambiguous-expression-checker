@@ -1,6 +1,6 @@
-import * as dotenv from "dotenv";
-// エミュレータの時だけ .env.local をロードする
-if (process.env.FUNCTIONS_EMULATOR) dotenv.config({ path: ".env.local" });
+import { loadEnv } from "./env";
+
+loadEnv();
 
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
