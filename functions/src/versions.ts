@@ -1,12 +1,22 @@
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
-import { AimaiCategory } from "@prisma/client";
 import type { CleanFinding } from "./storage";
 import { storageManager } from "./storage";
 import { verifyFirebaseToken } from "./auth";
 
-// Prisma を直接使っていなくても、storageManager 側で利用する可能性があるためバインド
+// カテゴリ定義を自前で持つ
+const CATEGORY_VALUES = [
+  "HEDGING",
+  "VAGUE",
+  "QUANTITY",
+  "RESPONSIBILITY",
+  "OTHER",
+] as const;
+type AimaiCategory = typeof CATEGORY_VALUES[number];
+const CATEGORY_SET = new Set<string>(CATEGORY_VALUES);
+
+// Secret 定義
 const DATABASE_URL = defineSecret("DATABASE_URL");
 
 type FindingPayload = {
@@ -26,8 +36,6 @@ type CreateVersionPayload = {
   findings?: FindingPayload[] | null;
   authorLabel?: string | null;
 };
-
-const CATEGORY_SET = new Set<string>(Object.values(AimaiCategory));
 
 const clampScore = (value: number) => Math.round(value * 100) / 100;
 
@@ -49,7 +57,9 @@ function sanitiseFindings(raw: FindingPayload[] | null | undefined) {
       }
       if (f.start < 0 || f.end < f.start) return null;
       if (!CATEGORY_SET.has(f.category)) return null;
+
       const severity = Math.max(1, Math.min(3, Math.floor(f.severity ?? 1)));
+
       return {
         start: f.start,
         end: f.end,
@@ -134,9 +144,6 @@ export const versions = onRequest(
         res.status(204).end();
         return;
       }
-
-      // Secret はバインド済み。必要に応じて読み出す場合は以下:
-      // const dbUrl = DATABASE_URL.value();
 
       const decoded = await verifyFirebaseToken(req.headers.authorization);
       const uid = decoded.uid;
@@ -338,10 +345,7 @@ export const versions = onRequest(
         return;
       }
 
-      if (
-        typeof errorCode === "string" &&
-        errorCode.startsWith("auth/")
-      ) {
+      if (typeof errorCode === "string" && errorCode.startsWith("auth/")) {
         res.status(401).json({ error: "unauthorized" });
         return;
       }
