@@ -1,9 +1,13 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
 import { AimaiCategory } from "@prisma/client";
 import type { CleanFinding } from "./storage";
 import { storageManager } from "./storage";
 import { verifyFirebaseToken } from "./auth";
+
+// Prisma を直接使っていなくても、storageManager 側で利用する可能性があるためバインド
+const DATABASE_URL = defineSecret("DATABASE_URL");
 
 type FindingPayload = {
   start: number;
@@ -123,13 +127,16 @@ function mapVersionSummary(version: {
 }
 
 export const versions = onRequest(
-  { cors: true, timeoutSeconds: 30 },
+  { cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] },
   async (req: Request, res: Response): Promise<void> => {
     try {
       if (req.method === "OPTIONS") {
         res.status(204).end();
         return;
       }
+
+      // Secret はバインド済み。必要に応じて読み出す場合は以下:
+      // const dbUrl = DATABASE_URL.value();
 
       const decoded = await verifyFirebaseToken(req.headers.authorization);
       const uid = decoded.uid;

@@ -2,9 +2,12 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dashboard = void 0;
 const https_1 = require("firebase-functions/v2/https");
+const params_1 = require("firebase-functions/params");
 const auth_1 = require("./auth");
 const db_1 = require("./db");
 const storage_1 = require("./storage");
+const DATABASE_URL = (0, params_1.defineSecret)("DATABASE_URL");
+// Prisma 直読み経路
 async function buildSummary(uid) {
     const versions = await db_1.prisma.articleVersion.findMany({
         where: { article: { authorId: uid } },
@@ -32,12 +35,13 @@ async function buildSummary(uid) {
         const latestRun = version.checkRuns[0];
         if (!latestRun)
             return null;
+        const createdAt = latestRun.createdAt ?? version.createdAt ?? new Date();
         return {
             versionId: version.id,
             articleId: version.articleId,
             articleTitle: version.article?.title ?? null,
             index: version.index,
-            createdAt: latestRun.createdAt ?? version.createdAt,
+            createdAt,
             aimaiScore: latestRun.aimaiScore,
             totalCount: latestRun.totalCount,
             charLength: latestRun.charLength,
@@ -55,12 +59,7 @@ async function buildSummary(uid) {
         const scorePercent = previous.aimaiScore
             ? (scoreDiff / previous.aimaiScore) * 100
             : null;
-        diff = {
-            countDiff,
-            countPercent,
-            scoreDiff,
-            scorePercent,
-        };
+        diff = { countDiff, countPercent, scoreDiff, scorePercent };
     }
     return { latest, previous, diff };
 }
@@ -81,9 +80,8 @@ async function buildScoreTrend(uid) {
             },
         },
     });
-    if (!runs.length) {
+    if (runs.length === 0)
         return [];
-    }
     return runs
         .map((run) => {
         if (!run.version)
@@ -115,21 +113,15 @@ async function buildCategoryTrend(uid) {
                 orderBy: { createdAt: "desc" },
                 take: 1,
                 select: {
-                    findings: {
-                        select: {
-                            category: true,
-                        },
-                    },
+                    findings: { select: { category: true } },
                     createdAt: true,
                 },
             },
         },
     });
-    if (!versions.length) {
+    if (versions.length === 0)
         return [];
-    }
-    const entries = versions
-        .map((version) => {
+    const entries = versions.map((version) => {
         const latestRun = version.checkRuns[0];
         if (!latestRun)
             return null;
@@ -142,10 +134,10 @@ async function buildCategoryTrend(uid) {
             createdAt: latestRun.createdAt ?? version.createdAt,
             counts,
         };
-    })
+    });
+    return entries
         .filter((entry) => entry !== null)
         .reverse();
-    return entries;
 }
 async function buildFrequentPhrases(uid) {
     const findings = await db_1.prisma.finding.findMany({
@@ -159,14 +151,13 @@ async function buildFrequentPhrases(uid) {
             createdAt: true,
         },
     });
-    if (!findings.length) {
+    if (findings.length === 0)
         return [];
-    }
     const bucket = new Map();
     findings.forEach((finding) => {
         const key = `${finding.category}__${finding.matchedText}`;
-        const entry = bucket.get(key);
-        if (!entry) {
+        const existing = bucket.get(key);
+        if (!existing) {
             bucket.set(key, {
                 matchedText: finding.matchedText,
                 category: finding.category,
@@ -176,10 +167,10 @@ async function buildFrequentPhrases(uid) {
             });
         }
         else {
-            entry.totalCount += 1;
-            entry.severitySum += finding.severity;
-            if (entry.lastFoundAt < finding.createdAt) {
-                entry.lastFoundAt = finding.createdAt;
+            existing.totalCount += 1;
+            existing.severitySum += finding.severity;
+            if (existing.lastFoundAt < finding.createdAt) {
+                existing.lastFoundAt = finding.createdAt;
             }
         }
     });
@@ -192,14 +183,14 @@ async function buildFrequentPhrases(uid) {
         lastFoundAt: value.lastFoundAt,
     }))
         .sort((a, b) => {
-        if (b.totalCount !== a.totalCount) {
+        if (b.totalCount !== a.totalCount)
             return b.totalCount - a.totalCount;
-        }
         return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
     })
         .slice(0, 10);
     return entries;
 }
+// Prisma 不通時のフォールバック
 function isPrismaUnavailable(error) {
     if (!error)
         return false;
@@ -265,12 +256,7 @@ function computeDiff(latest, previous) {
     const scorePercent = previous.aimaiScore
         ? (scoreDiff / previous.aimaiScore) * 100
         : null;
-    return {
-        countDiff,
-        countPercent,
-        scoreDiff,
-        scorePercent,
-    };
+    return { countDiff, countPercent, scoreDiff, scorePercent };
 }
 function buildSummaryFromSnapshots(snapshots) {
     const [latestSnapshot, previousSnapshot] = snapshots;
@@ -279,7 +265,7 @@ function buildSummaryFromSnapshots(snapshots) {
     return { latest, previous, diff: computeDiff(latest, previous) };
 }
 function buildScoreTrendFromSnapshots(snapshots) {
-    const limited = snapshots.filter((snapshot) => snapshot.checkRun).slice(0, 20);
+    const limited = snapshots.filter((s) => s.checkRun).slice(0, 20);
     return limited
         .map((snapshot) => {
         const run = snapshot.checkRun;
@@ -299,7 +285,7 @@ function buildScoreTrendFromSnapshots(snapshots) {
         .reverse();
 }
 async function loadVersionDetails(uid, snapshots) {
-    const uniqueIds = [...new Set(snapshots.map((snapshot) => snapshot.versionId))];
+    const uniqueIds = [...new Set(snapshots.map((s) => s.versionId))];
     const detailPairs = await Promise.all(uniqueIds.map(async (versionId) => {
         const detail = await storage_1.storageManager.getVersion(versionId, uid);
         return detail ? [versionId, detail] : null;
@@ -321,7 +307,7 @@ function buildCategoryTrendFromDetails(snapshots, details) {
         if (!run)
             continue;
         const counts = {};
-        for (const finding of run.findings ?? []) {
+        for (const finding of (run.findings ?? [])) {
             counts[finding.category] = (counts[finding.category] ?? 0) + 1;
         }
         const createdAt = run.createdAt instanceof Date ? run.createdAt : new Date(run.createdAt);
@@ -334,7 +320,7 @@ function buildCategoryTrendFromDetails(snapshots, details) {
     return entries.reverse();
 }
 function buildFrequentPhrasesFromDetails(details) {
-    if (!details.size)
+    if (details.size === 0)
         return [];
     const bucket = new Map();
     for (const version of details.values()) {
@@ -342,7 +328,7 @@ function buildFrequentPhrasesFromDetails(details) {
         if (!run)
             continue;
         const runCreatedAt = run.createdAt instanceof Date ? run.createdAt : new Date(run.createdAt);
-        for (const finding of run.findings ?? []) {
+        for (const finding of (run.findings ?? [])) {
             const key = `${finding.category}__${finding.matchedText}`;
             const existing = bucket.get(key);
             if (!existing) {
@@ -372,9 +358,8 @@ function buildFrequentPhrasesFromDetails(details) {
         lastFoundAt: value.lastFoundAt,
     }))
         .sort((a, b) => {
-        if (b.totalCount !== a.totalCount) {
+        if (b.totalCount !== a.totalCount)
             return b.totalCount - a.totalCount;
-        }
         return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
     })
         .slice(0, 10);
@@ -382,7 +367,7 @@ function buildFrequentPhrasesFromDetails(details) {
 }
 async function buildDashboardFromMemory(uid) {
     const articles = await loadArticlesFromMemory(uid);
-    if (!articles.length) {
+    if (articles.length === 0) {
         return {
             summary: { latest: null, previous: null, diff: null },
             scoreTrend: [],
@@ -398,25 +383,41 @@ async function buildDashboardFromMemory(uid) {
     const frequentPhrases = buildFrequentPhrasesFromDetails(details);
     return { summary, scoreTrend, categoryTrend, frequentPhrases };
 }
-async function buildDashboardWithPrisma(uid) {
-    const summary = await buildSummary(uid);
-    const scoreTrend = await buildScoreTrend(uid);
-    const categoryTrend = await buildCategoryTrend(uid);
-    const frequentPhrases = await buildFrequentPhrases(uid);
-    return { summary, scoreTrend, categoryTrend, frequentPhrases };
-}
-exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
+// エンドポイント
+exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] }, async (req, res) => {
     let uid = null;
     try {
         if (req.method !== "GET") {
             res.status(405).json({ error: "method_not_allowed" });
             return;
         }
+        // バインドされた Secret を必要に応じて取り出す場合は以下
+        // const _dbUrl = DATABASE_URL.value();
         const decoded = await (0, auth_1.verifyFirebaseToken)(req.headers.authorization);
         uid = decoded.uid;
-        console.log("[dashboard] request", { uid });
-        const payload = await buildDashboardWithPrisma(uid);
-        res.json(payload);
+        // まずは Prisma 直読みを試す
+        try {
+            const summary = await buildSummary(uid);
+            const scoreTrend = await buildScoreTrend(uid);
+            const categoryTrend = await buildCategoryTrend(uid);
+            const frequentPhrases = await buildFrequentPhrases(uid);
+            const payload = {
+                summary,
+                scoreTrend,
+                categoryTrend,
+                frequentPhrases,
+            };
+            res.json(payload);
+            return;
+        }
+        catch (e) {
+            if (!isPrismaUnavailable(e))
+                throw e;
+            // フォールバック
+            const fallbackPayload = await buildDashboardFromMemory(uid);
+            res.json(fallbackPayload);
+            return;
+        }
     }
     catch (error) {
         if (error instanceof Error &&
@@ -429,17 +430,6 @@ exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, a
         if (typeof code === "string" && code.startsWith("auth/")) {
             res.status(401).json({ error: "unauthorized" });
             return;
-        }
-        if (uid && isPrismaUnavailable(error)) {
-            console.warn("[dashboard] prisma unavailable, falling back to memory", error);
-            try {
-                const payload = await buildDashboardFromMemory(uid);
-                res.json(payload);
-                return;
-            }
-            catch (fallbackError) {
-                console.error("[dashboard] memory fallback failed", fallbackError);
-            }
         }
         console.error("[dashboard] unexpected_error", error);
         res.status(500).json({ error: "internal_error" });

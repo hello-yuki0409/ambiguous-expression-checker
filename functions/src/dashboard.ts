@@ -1,4 +1,5 @@
 import { onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
 import { verifyFirebaseToken } from "./auth";
 import { prisma } from "./db";
@@ -9,24 +10,28 @@ import {
   type StoredVersion,
 } from "./storage";
 
+const DATABASE_URL = defineSecret("DATABASE_URL");
+
+type SummaryEntry = {
+  versionId: string;
+  articleId: string;
+  articleTitle: string | null;
+  index: number;
+  createdAt: Date;
+  aimaiScore: number;
+  totalCount: number;
+  charLength: number;
+};
+
 type SummaryPayload = {
-  latest: null | {
-    versionId: string;
-    articleId: string;
-    articleTitle: string | null;
-    index: number;
-    createdAt: Date;
-    aimaiScore: number;
-    totalCount: number;
-    charLength: number;
-  };
-  previous: SummaryPayload["latest"];
-  diff: null | {
+  latest: SummaryEntry | null;
+  previous: SummaryEntry | null;
+  diff: {
     countDiff: number;
     countPercent: number | null;
     scoreDiff: number;
     scorePercent: number | null;
-  };
+  } | null;
 };
 
 type ScoreTrendEntry = {
@@ -40,6 +45,29 @@ type ScoreTrendEntry = {
   totalCount: number;
   charLength: number;
 };
+
+type CategoryTrendEntry = {
+  versionId: string;
+  createdAt: Date;
+  counts: Record<string, number>;
+};
+
+type FrequentPhraseEntry = {
+  matchedText: string;
+  category: string;
+  totalCount: number;
+  severityAvg: number;
+  lastFoundAt: Date;
+};
+
+type DashboardPayload = {
+  summary: SummaryPayload;
+  scoreTrend: ScoreTrendEntry[];
+  categoryTrend: CategoryTrendEntry[];
+  frequentPhrases: FrequentPhraseEntry[];
+};
+
+// Prisma 直読み経路
 
 async function buildSummary(uid: string): Promise<SummaryPayload> {
   const versions = await prisma.articleVersion.findMany({
@@ -66,19 +94,21 @@ async function buildSummary(uid: string): Promise<SummaryPayload> {
     return { latest: null, previous: null, diff: null };
   }
 
-  const mapEntry = (version: (typeof versions)[number]) => {
+  const mapEntry = (version: (typeof versions)[number]): SummaryEntry | null => {
     const latestRun = version.checkRuns[0];
     if (!latestRun) return null;
+    const createdAt: Date =
+      latestRun.createdAt ?? version.createdAt ?? new Date();
     return {
       versionId: version.id,
       articleId: version.articleId,
       articleTitle: version.article?.title ?? null,
       index: version.index,
-      createdAt: latestRun.createdAt ?? version.createdAt,
+      createdAt,
       aimaiScore: latestRun.aimaiScore,
       totalCount: latestRun.totalCount,
       charLength: latestRun.charLength,
-    } as SummaryPayload["latest"];
+    };
   };
 
   const latest = mapEntry(versions[0]);
@@ -94,12 +124,7 @@ async function buildSummary(uid: string): Promise<SummaryPayload> {
     const scorePercent = previous.aimaiScore
       ? (scoreDiff / previous.aimaiScore) * 100
       : null;
-    diff = {
-      countDiff,
-      countPercent,
-      scoreDiff,
-      scorePercent,
-    };
+    diff = { countDiff, countPercent, scoreDiff, scorePercent };
   }
 
   return { latest, previous, diff };
@@ -123,12 +148,10 @@ async function buildScoreTrend(uid: string): Promise<ScoreTrendEntry[]> {
     },
   });
 
-  if (!runs.length) {
-    return [];
-  }
+  if (runs.length === 0) return [];
 
   return runs
-    .map((run) => {
+    .map((run: typeof runs[number]) => {
       if (!run.version) return null;
       return {
         runId: run.id,
@@ -140,25 +163,11 @@ async function buildScoreTrend(uid: string): Promise<ScoreTrendEntry[]> {
         aimaiScore: run.aimaiScore,
         totalCount: run.totalCount,
         charLength: run.charLength,
-      } satisfies ScoreTrendEntry;
+      } as ScoreTrendEntry;
     })
-    .filter((entry): entry is ScoreTrendEntry => entry !== null)
+    .filter((entry: ScoreTrendEntry | null): entry is ScoreTrendEntry => entry !== null)
     .reverse();
 }
-
-type CategoryTrendEntry = {
-  versionId: string;
-  createdAt: Date;
-  counts: Record<string, number>;
-};
-
-type FrequentPhraseEntry = {
-  matchedText: string;
-  category: string;
-  totalCount: number;
-  severityAvg: number;
-  lastFoundAt: Date;
-};
 
 async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
   const versions = await prisma.articleVersion.findMany({
@@ -172,28 +181,22 @@ async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
         orderBy: { createdAt: "desc" },
         take: 1,
         select: {
-          findings: {
-            select: {
-              category: true,
-            },
-          },
+          findings: { select: { category: true } },
           createdAt: true,
         },
       },
     },
   });
 
-  if (!versions.length) {
-    return [];
-  }
+  if (versions.length === 0) return [];
 
-  const entries: CategoryTrendEntry[] = versions
-    .map((version) => {
+  const entries: Array<CategoryTrendEntry | null> = versions.map(
+    (version: typeof versions[number]) => {
       const latestRun = version.checkRuns[0];
       if (!latestRun) return null;
 
       const counts: Record<string, number> = {};
-      latestRun.findings.forEach((finding) => {
+      latestRun.findings.forEach((finding: { category: string }) => {
         counts[finding.category] = (counts[finding.category] ?? 0) + 1;
       });
 
@@ -201,12 +204,16 @@ async function buildCategoryTrend(uid: string): Promise<CategoryTrendEntry[]> {
         versionId: version.id,
         createdAt: latestRun.createdAt ?? version.createdAt,
         counts,
-      } satisfies CategoryTrendEntry;
-    })
-    .filter((entry): entry is CategoryTrendEntry => entry !== null)
-    .reverse();
+      };
+    }
+  );
 
-  return entries;
+  return entries
+    .filter(
+      (entry: CategoryTrendEntry | null): entry is CategoryTrendEntry =>
+        entry !== null
+    )
+    .reverse();
 }
 
 async function buildFrequentPhrases(uid: string): Promise<FrequentPhraseEntry[]> {
@@ -222,50 +229,55 @@ async function buildFrequentPhrases(uid: string): Promise<FrequentPhraseEntry[]>
     },
   });
 
-  if (!findings.length) {
-    return [];
-  }
+  if (findings.length === 0) return [];
 
-  const bucket = new Map<string, {
+  type BucketValue = {
     matchedText: string;
     category: string;
     totalCount: number;
     severitySum: number;
     lastFoundAt: Date;
-  }>();
+  };
 
-  findings.forEach((finding) => {
-    const key = `${finding.category}__${finding.matchedText}`;
-    const entry = bucket.get(key);
-    if (!entry) {
-      bucket.set(key, {
-        matchedText: finding.matchedText,
-        category: finding.category,
-        totalCount: 1,
-        severitySum: finding.severity,
-        lastFoundAt: finding.createdAt,
-      });
-    } else {
-      entry.totalCount += 1;
-      entry.severitySum += finding.severity;
-      if (entry.lastFoundAt < finding.createdAt) {
-        entry.lastFoundAt = finding.createdAt;
+  const bucket = new Map<string, BucketValue>();
+
+  findings.forEach(
+    (finding: {
+      matchedText: string;
+      category: string;
+      severity: number;
+      createdAt: Date;
+    }) => {
+      const key = `${finding.category}__${finding.matchedText}`;
+      const existing = bucket.get(key);
+      if (!existing) {
+        bucket.set(key, {
+          matchedText: finding.matchedText,
+          category: finding.category,
+          totalCount: 1,
+          severitySum: finding.severity,
+          lastFoundAt: finding.createdAt,
+        });
+      } else {
+        existing.totalCount += 1;
+        existing.severitySum += finding.severity;
+        if (existing.lastFoundAt < finding.createdAt) {
+          existing.lastFoundAt = finding.createdAt;
+        }
       }
     }
-  });
+  );
 
   const entries: FrequentPhraseEntry[] = [...bucket.values()]
-    .map((value) => ({
+    .map((value: BucketValue): FrequentPhraseEntry => ({
       matchedText: value.matchedText,
       category: value.category,
       totalCount: value.totalCount,
       severityAvg: value.severitySum / value.totalCount,
       lastFoundAt: value.lastFoundAt,
     }))
-    .sort((a, b) => {
-      if (b.totalCount !== a.totalCount) {
-        return b.totalCount - a.totalCount;
-      }
+    .sort((a: FrequentPhraseEntry, b: FrequentPhraseEntry) => {
+      if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
       return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
     })
     .slice(0, 10);
@@ -273,14 +285,9 @@ async function buildFrequentPhrases(uid: string): Promise<FrequentPhraseEntry[]>
   return entries;
 }
 
-type DashboardPayload = {
-  summary: SummaryPayload;
-  scoreTrend: ScoreTrendEntry[];
-  categoryTrend: CategoryTrendEntry[];
-  frequentPhrases: FrequentPhraseEntry[];
-};
+// Prisma 不通時のフォールバック
 
-function isPrismaUnavailable(error: unknown) {
+function isPrismaUnavailable(error: unknown): boolean {
   if (!error) return false;
   const name = (error as { name?: string }).name;
   if (name === "PrismaClientInitializationError") return true;
@@ -288,12 +295,6 @@ function isPrismaUnavailable(error: unknown) {
   if (/Tenant or user not found/i.test(message)) return true;
   const code = (error as { code?: string | number }).code;
   return code === "ECONNREFUSED";
-}
-
-async function loadArticlesFromMemory(uid: string) {
-  const TAKE = 50;
-  const articles = (await storageManager.listArticles(TAKE, 0, uid)) as StoredArticle[];
-  return articles;
 }
 
 type VersionSnapshot = {
@@ -304,6 +305,12 @@ type VersionSnapshot = {
   createdAt: Date;
   checkRun: StoredCheckRun | null;
 };
+
+async function loadArticlesFromMemory(uid: string): Promise<StoredArticle[]> {
+  const TAKE = 50;
+  const articles = (await storageManager.listArticles(TAKE, 0, uid)) as StoredArticle[];
+  return articles;
+}
 
 function createSnapshots(articles: StoredArticle[]): VersionSnapshot[] {
   const snapshots: VersionSnapshot[] = [];
@@ -324,12 +331,13 @@ function createSnapshots(articles: StoredArticle[]): VersionSnapshot[] {
       });
     }
   }
-
   snapshots.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   return snapshots;
 }
 
-function mapSummaryEntry(snapshot: VersionSnapshot | undefined): SummaryPayload["latest"] {
+function mapSummaryEntry(
+  snapshot: VersionSnapshot | undefined
+): SummaryEntry | null {
   if (!snapshot || !snapshot.checkRun) return null;
   const run = snapshot.checkRun;
   const createdAt =
@@ -347,8 +355,8 @@ function mapSummaryEntry(snapshot: VersionSnapshot | undefined): SummaryPayload[
 }
 
 function computeDiff(
-  latest: SummaryPayload["latest"],
-  previous: SummaryPayload["latest"]
+  latest: SummaryEntry | null,
+  previous: SummaryEntry | null
 ): SummaryPayload["diff"] {
   if (!latest || !previous) return null;
   const countDiff = latest.totalCount - previous.totalCount;
@@ -359,12 +367,7 @@ function computeDiff(
   const scorePercent = previous.aimaiScore
     ? (scoreDiff / previous.aimaiScore) * 100
     : null;
-  return {
-    countDiff,
-    countPercent,
-    scoreDiff,
-    scorePercent,
-  };
+  return { countDiff, countPercent, scoreDiff, scorePercent };
 }
 
 function buildSummaryFromSnapshots(snapshots: VersionSnapshot[]): SummaryPayload {
@@ -377,9 +380,9 @@ function buildSummaryFromSnapshots(snapshots: VersionSnapshot[]): SummaryPayload
 function buildScoreTrendFromSnapshots(
   snapshots: VersionSnapshot[]
 ): ScoreTrendEntry[] {
-  const limited = snapshots.filter((snapshot) => snapshot.checkRun).slice(0, 20);
+  const limited = snapshots.filter((s) => s.checkRun).slice(0, 20);
   return limited
-    .map((snapshot) => {
+    .map((snapshot): ScoreTrendEntry => {
       const run = snapshot.checkRun as StoredCheckRun;
       const createdAt =
         run.createdAt instanceof Date ? run.createdAt : new Date(run.createdAt);
@@ -393,7 +396,7 @@ function buildScoreTrendFromSnapshots(
         aimaiScore: run.aimaiScore,
         totalCount: run.totalCount,
         charLength: run.charLength,
-      } satisfies ScoreTrendEntry;
+      };
     })
     .reverse();
 }
@@ -401,15 +404,14 @@ function buildScoreTrendFromSnapshots(
 async function loadVersionDetails(
   uid: string,
   snapshots: VersionSnapshot[]
-) {
-  const uniqueIds = [...new Set(snapshots.map((snapshot) => snapshot.versionId))];
+): Promise<Map<string, StoredVersion>> {
+  const uniqueIds = [...new Set(snapshots.map((s) => s.versionId))];
   const detailPairs = await Promise.all(
     uniqueIds.map(async (versionId) => {
       const detail = await storageManager.getVersion(versionId, uid);
       return detail ? ([versionId, detail] as const) : null;
     })
   );
-
   const map = new Map<string, StoredVersion>();
   for (const pair of detailPairs) {
     if (!pair) continue;
@@ -431,7 +433,7 @@ function buildCategoryTrendFromDetails(
     if (!run) continue;
 
     const counts: Record<string, number> = {};
-    for (const finding of run.findings ?? []) {
+    for (const finding of (run.findings ?? []) as Array<{ category: string }>) {
       counts[finding.category] = (counts[finding.category] ?? 0) + 1;
     }
 
@@ -451,18 +453,17 @@ function buildCategoryTrendFromDetails(
 function buildFrequentPhrasesFromDetails(
   details: Map<string, StoredVersion>
 ): FrequentPhraseEntry[] {
-  if (!details.size) return [];
+  if (details.size === 0) return [];
 
-  const bucket = new Map<
-    string,
-    {
-      matchedText: string;
-      category: string;
-      totalCount: number;
-      severitySum: number;
-      lastFoundAt: Date;
-    }
-  >();
+  type BucketValue = {
+    matchedText: string;
+    category: string;
+    totalCount: number;
+    severitySum: number;
+    lastFoundAt: Date;
+  };
+
+  const bucket = new Map<string, BucketValue>();
 
   for (const version of details.values()) {
     const run = version.checkRuns[0];
@@ -471,7 +472,11 @@ function buildFrequentPhrasesFromDetails(
     const runCreatedAt =
       run.createdAt instanceof Date ? run.createdAt : new Date(run.createdAt);
 
-    for (const finding of run.findings ?? []) {
+    for (const finding of (run.findings ?? []) as Array<{
+      matchedText: string;
+      category: string;
+      severity: number;
+    }>) {
       const key = `${finding.category}__${finding.matchedText}`;
       const existing = bucket.get(key);
 
@@ -494,17 +499,15 @@ function buildFrequentPhrasesFromDetails(
   }
 
   const entries: FrequentPhraseEntry[] = [...bucket.values()]
-    .map((value) => ({
+    .map((value: BucketValue): FrequentPhraseEntry => ({
       matchedText: value.matchedText,
       category: value.category,
       totalCount: value.totalCount,
       severityAvg: value.severitySum / value.totalCount,
       lastFoundAt: value.lastFoundAt,
     }))
-    .sort((a, b) => {
-      if (b.totalCount !== a.totalCount) {
-        return b.totalCount - a.totalCount;
-      }
+    .sort((a: FrequentPhraseEntry, b: FrequentPhraseEntry) => {
+      if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
       return b.lastFoundAt.getTime() - a.lastFoundAt.getTime();
     })
     .slice(0, 10);
@@ -514,7 +517,7 @@ function buildFrequentPhrasesFromDetails(
 
 async function buildDashboardFromMemory(uid: string): Promise<DashboardPayload> {
   const articles = await loadArticlesFromMemory(uid);
-  if (!articles.length) {
+  if (articles.length === 0) {
     return {
       summary: { latest: null, previous: null, diff: null },
       scoreTrend: [],
@@ -522,27 +525,19 @@ async function buildDashboardFromMemory(uid: string): Promise<DashboardPayload> 
       frequentPhrases: [],
     };
   }
-
   const snapshots = createSnapshots(articles);
   const summary = buildSummaryFromSnapshots(snapshots);
   const scoreTrend = buildScoreTrendFromSnapshots(snapshots);
   const details = await loadVersionDetails(uid, snapshots);
   const categoryTrend = buildCategoryTrendFromDetails(snapshots, details);
   const frequentPhrases = buildFrequentPhrasesFromDetails(details);
-
   return { summary, scoreTrend, categoryTrend, frequentPhrases };
 }
 
-async function buildDashboardWithPrisma(uid: string): Promise<DashboardPayload> {
-  const summary = await buildSummary(uid);
-  const scoreTrend = await buildScoreTrend(uid);
-  const categoryTrend = await buildCategoryTrend(uid);
-  const frequentPhrases = await buildFrequentPhrases(uid);
-  return { summary, scoreTrend, categoryTrend, frequentPhrases };
-}
+// エンドポイント
 
 export const dashboard = onRequest(
-  { cors: true, timeoutSeconds: 30 },
+  { cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] },
   async (req: Request, res: Response) => {
     let uid: string | null = null;
     try {
@@ -551,13 +546,33 @@ export const dashboard = onRequest(
         return;
       }
 
+      // バインドされた Secret を必要に応じて取り出す場合は以下
+      // const _dbUrl = DATABASE_URL.value();
+
       const decoded = await verifyFirebaseToken(req.headers.authorization);
       uid = decoded.uid;
-      console.log("[dashboard] request", { uid });
 
-      const payload = await buildDashboardWithPrisma(uid);
-
-      res.json(payload);
+      // まずは Prisma 直読みを試す
+      try {
+        const summary = await buildSummary(uid);
+        const scoreTrend = await buildScoreTrend(uid);
+        const categoryTrend = await buildCategoryTrend(uid);
+        const frequentPhrases = await buildFrequentPhrases(uid);
+        const payload: DashboardPayload = {
+          summary,
+          scoreTrend,
+          categoryTrend,
+          frequentPhrases,
+        };
+        res.json(payload);
+        return;
+      } catch (e) {
+        if (!isPrismaUnavailable(e)) throw e;
+        // フォールバック
+        const fallbackPayload = await buildDashboardFromMemory(uid);
+        res.json(fallbackPayload);
+        return;
+      }
     } catch (error) {
       if (
         error instanceof Error &&
@@ -572,23 +587,6 @@ export const dashboard = onRequest(
       if (typeof code === "string" && code.startsWith("auth/")) {
         res.status(401).json({ error: "unauthorized" });
         return;
-      }
-
-      if (uid && isPrismaUnavailable(error)) {
-        console.warn(
-          "[dashboard] prisma unavailable, falling back to memory",
-          error
-        );
-        try {
-          const payload = await buildDashboardFromMemory(uid);
-          res.json(payload);
-          return;
-        } catch (fallbackError) {
-          console.error(
-            "[dashboard] memory fallback failed",
-            fallbackError
-          );
-        }
       }
 
       console.error("[dashboard] unexpected_error", error);

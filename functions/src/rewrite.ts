@@ -8,10 +8,11 @@ import type { Request, Response } from "express";
 import OpenAI, { APIError } from "openai";
 
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
+const DATABASE_URL = defineSecret("DATABASE_URL");
 const DEFAULT_MODEL = process.env.OPENAI_REWRITE_MODEL ?? "gpt-4.1-mini";
 
 export const rewrite = onRequest(
-  { cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY] },
+  { cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY, DATABASE_URL] },
   async (req: Request, res: Response): Promise<void> => {
     try {
       const apiKey = OPENAI_API_KEY.value() || process.env.OPENAI_API_KEY;
