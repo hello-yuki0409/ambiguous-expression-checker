@@ -3,16 +3,26 @@ import * as dotenv from "dotenv";
 if (process.env.FUNCTIONS_EMULATOR) dotenv.config({ path: ".env.local" });
 
 import { onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
 import OpenAI, { APIError } from "openai";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! }); // 必須なので
+const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 const DEFAULT_MODEL = process.env.OPENAI_REWRITE_MODEL ?? "gpt-4.1-mini";
 
 export const rewrite = onRequest(
-  { cors: true, timeoutSeconds: 30 },
+  { cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY] },
   async (req: Request, res: Response): Promise<void> => {
     try {
+      const apiKey = OPENAI_API_KEY.value() || process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        console.error("OPENAI_API_KEY is not configured");
+        res.status(500).json({ error: { message: "missing_api_key" } });
+        return;
+      }
+
+      const openai = new OpenAI({ apiKey });
+
       const { text, context, category, style } = req.body as {
         text: string;
         context?: string;

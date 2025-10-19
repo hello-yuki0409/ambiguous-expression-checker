@@ -39,11 +39,19 @@ const dotenv = __importStar(require("dotenv"));
 if (process.env.FUNCTIONS_EMULATOR)
     dotenv.config({ path: ".env.local" });
 const https_1 = require("firebase-functions/v2/https");
+const params_1 = require("firebase-functions/params");
 const openai_1 = __importStar(require("openai"));
-const openai = new openai_1.default({ apiKey: process.env.OPENAI_API_KEY }); // 必須なので
+const OPENAI_API_KEY = (0, params_1.defineSecret)("OPENAI_API_KEY");
 const DEFAULT_MODEL = process.env.OPENAI_REWRITE_MODEL ?? "gpt-4.1-mini";
-exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30 }, async (req, res) => {
+exports.rewrite = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [OPENAI_API_KEY] }, async (req, res) => {
     try {
+        const apiKey = OPENAI_API_KEY.value() || process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            console.error("OPENAI_API_KEY is not configured");
+            res.status(500).json({ error: { message: "missing_api_key" } });
+            return;
+        }
+        const openai = new openai_1.default({ apiKey });
         const { text, context, category, style } = req.body;
         if (!text) {
             res.status(400).json({ error: { message: "text is required" } });
