@@ -30,3 +30,4 @@ dist-ssr
 .env.local
 prisma/.env
 functions/.env
+functions/storage-cache.json

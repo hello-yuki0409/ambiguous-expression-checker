@@ -1,3 +1,7 @@
+import { loadEnv } from "./env";
+
+loadEnv();
+
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import type { Request, Response } from "express";
@@ -541,13 +545,15 @@ export const dashboard = onRequest(
   async (req: Request, res: Response) => {
     let uid: string | null = null;
     try {
+      const dbUrl = DATABASE_URL.value();
+      if (dbUrl) {
+        process.env.DATABASE_URL = dbUrl;
+      }
+
       if (req.method !== "GET") {
         res.status(405).json({ error: "method_not_allowed" });
         return;
       }
-
-      // バインドされた Secret を必要に応じて取り出す場合は以下
-      // const _dbUrl = DATABASE_URL.value();
 
       const decoded = await verifyFirebaseToken(req.headers.authorization);
       uid = decoded.uid;

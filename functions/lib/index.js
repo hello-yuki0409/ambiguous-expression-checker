@@ -1,6 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.dashboard = exports.versions = exports.rewrite = void 0;
+const env_1 = require("./env");
+(0, env_1.loadEnv)();
 var rewrite_1 = require("./rewrite");
 Object.defineProperty(exports, "rewrite", { enumerable: true, get: function () { return rewrite_1.rewrite; } });
 var versions_1 = require("./versions");
