@@ -13,7 +13,8 @@
     "green-network-472014-a4": {
       "hosting": {
         "default": [
-          "ambiguous-expression-checker"
+          "ambiguous-expression-checker",
+          "green-network-472014-a4"
         ]
       }
     }
