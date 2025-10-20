@@ -50,9 +50,12 @@
 - 事実関係の一次情報確認
 - トンマナを意識した言い換え
 
-## デモ動画（準備中）
+## デモ動画
 
-1 分以内とか、なるべく短く。
+
+![2025-10-2022 49 17-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/f04d2008-cd34-4281-b863-a8976a23b381)
+
+
 
 ## 技術スタック
 
