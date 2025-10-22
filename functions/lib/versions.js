@@ -87,7 +87,12 @@ function mapVersionSummary(version) {
         checkRun: latestRun ? mapCheckRun(latestRun) : null,
     };
 }
-exports.versions = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] }, async (req, res) => {
+exports.versions = (0, https_1.onRequest)({
+    cors: true,
+    timeoutSeconds: 30,
+    invoker: "public",
+    secrets: [DATABASE_URL],
+}, async (req, res) => {
     try {
         const dbUrl = DATABASE_URL.value();
         if (dbUrl) {
