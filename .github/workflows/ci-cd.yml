@@ -90,7 +90,7 @@ jobs:
           npx firebase-tools@latest hosting:channel:deploy "$SAFE_CHANNEL" \
             --only default \
             --expires 7d \
-            --project green-network-472014-a4
+            --project ambiguous-expression-checker
 
   deploy-production:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -118,4 +118,4 @@ jobs:
         run: |
           npx firebase-tools@latest deploy \
             --only hosting:default \
-            --project green-network-472014-a4
+            --project ambiguous-expression-checker
