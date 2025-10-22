@@ -58,8 +58,11 @@ function loadEnv() {
         if (fs_1.default.existsSync(file)) {
             dotenv.config({ path: file });
             loaded = true;
-            return;
+            break;
         }
     }
     loaded = true;
+    if (!process.env.PGOPTIONS) {
+        process.env.PGOPTIONS = "--search_path=aimai";
+    }
 }
