@@ -141,7 +141,12 @@ function mapVersionSummary(version: {
 }
 
 export const versions = onRequest(
-  { cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] },
+  {
+    cors: true,
+    timeoutSeconds: 30,
+    invoker: "public",
+    secrets: [DATABASE_URL],
+  },
   async (req: Request, res: Response): Promise<void> => {
     try {
       const dbUrl = DATABASE_URL.value();

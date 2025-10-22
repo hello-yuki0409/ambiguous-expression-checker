@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "lib/index.js",
   "type": "commonjs",
-  "engines": { "node": "20" },
+  "engines": {
+    "node": "20"
+  },
   "scripts": {
     "prebuild": "npx prisma generate --schema=./prisma/schema.prisma",
     "build": "tsc -p tsconfig.json",
@@ -19,6 +21,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.2",
+    "dotenv-cli": "^10.0.0",
     "typescript": "^5.4.5"
   }
 }

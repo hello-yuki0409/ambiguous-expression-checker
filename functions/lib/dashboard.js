@@ -386,7 +386,12 @@ async function buildDashboardFromMemory(uid) {
     return { summary, scoreTrend, categoryTrend, frequentPhrases };
 }
 // エンドポイント
-exports.dashboard = (0, https_1.onRequest)({ cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] }, async (req, res) => {
+exports.dashboard = (0, https_1.onRequest)({
+    cors: true,
+    timeoutSeconds: 30,
+    invoker: "public",
+    secrets: [DATABASE_URL],
+}, async (req, res) => {
     let uid = null;
     try {
         const dbUrl = DATABASE_URL.value();

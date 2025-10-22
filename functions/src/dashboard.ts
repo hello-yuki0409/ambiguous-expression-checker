@@ -541,7 +541,12 @@ async function buildDashboardFromMemory(uid: string): Promise<DashboardPayload> 
 // エンドポイント
 
 export const dashboard = onRequest(
-  { cors: true, timeoutSeconds: 30, secrets: [DATABASE_URL] },
+  {
+    cors: true,
+    timeoutSeconds: 30,
+    invoker: "public",
+    secrets: [DATABASE_URL],
+  },
   async (req: Request, res: Response) => {
     let uid: string | null = null;
     try {
