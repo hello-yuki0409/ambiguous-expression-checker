@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { AuthModeSwitcher } from "@/components/molecules/auth/AuthModeSwitcher";
@@ -24,18 +24,17 @@ export default function Login() {
     submitLabel,
   } = useAuthForm("signIn");
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      // カスタムフック側でリダイレクト済みなのでページ側では確認のみ
-    }
-  }, [authLoading, user]);
-
-  if (authLoading && !user) {
+  if (authLoading) {
     return (
       <PageShell className="flex h-screen items-center justify-center">
         <div className="text-emerald-700">認証状態を確認しています...</div>
       </PageShell>
     );
+  }
+
+  // user が存在する場合は即トップページへ移動させる
+  if (user) {
+    return <Navigate to="/" replace />;
   }
 
   const title = mode === "signUp" ? "アカウント作成" : "ログイン";
