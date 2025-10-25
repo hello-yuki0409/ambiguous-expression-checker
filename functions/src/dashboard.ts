@@ -289,7 +289,7 @@ async function buildFrequentPhrases(uid: string): Promise<FrequentPhraseEntry[]>
   return entries;
 }
 
-// Prisma 不通時のフォールバック
+// Prisma が通らなかった場合のフォールバック
 
 function isPrismaUnavailable(error: unknown): boolean {
   if (!error) return false;

@@ -1,4 +1,4 @@
-PROJECT_ID ?= green-network-472014-a4
+PROJECT_ID ?= ambiguous-expression-checker
 CHANNEL ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo preview)
 
 .PHONY: help dev build test lint typecheck deploy deploy-preview clean
