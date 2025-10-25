@@ -73,10 +73,12 @@ export function useHistoryPage() {
     [selectedArticleId]
   );
 
+  // 履歴サマリーの取得をする
   useEffect(() => {
     void loadSummaries();
   }, [loadSummaries]);
 
+  // 記事詳細をフェッチしてクリーンアップも行う
   useEffect(() => {
     if (!selectedArticleId) {
       setArticle(null);
@@ -112,6 +114,7 @@ export function useHistoryPage() {
     };
   }, [selectedArticleId]);
 
+  // バージョン詳細をフェッチして差分表示用にセットする
   useEffect(() => {
     if (selectedVersions.length !== 2) {
       setDiff(null);

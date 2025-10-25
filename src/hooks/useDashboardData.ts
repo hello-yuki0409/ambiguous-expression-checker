@@ -27,7 +27,8 @@ export function useDashboardData(user: User | null) {
       setLoading(false);
     }
   }, [user]);
-
+  
+  // ダッシュボード API を呼び出す
   useEffect(() => {
     void load();
   }, [load, refreshKey]);
