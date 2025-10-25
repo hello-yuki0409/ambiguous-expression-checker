@@ -8,6 +8,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Firebase の認証状態の変化を監視する用
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(
       auth,

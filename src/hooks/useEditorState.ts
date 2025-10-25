@@ -263,7 +263,8 @@ export function useEditorState(user: User | null): UseEditorStateResult {
       } satisfies monaco.editor.IModelDeltaDecoration;
     });
   }, [findings]);
-
+  
+  // Monaco Editor の装飾を差し替えたり後始末したりする
   useEffect(() => {
     const editor = editorRef.current;
     if (!editor) return;
@@ -276,6 +277,7 @@ export function useEditorState(user: User | null): UseEditorStateResult {
     };
   }, [decorations]);
 
+  // 保存完了メッセージを一定時間でクリアするため
   useEffect(() => {
     if (!saveMessage) return;
     const timer = window.setTimeout(() => setSaveMessage(null), 2500);
